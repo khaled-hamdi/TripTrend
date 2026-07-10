@@ -27,7 +27,7 @@ USERS = {
 
 CITIES = {
     "Paris": {
-        "file": "subjectsanalysis.xlsx",
+        "file": "Hotel 10-7.xlsx",
         "emoji": "🗼",
         "country": "France",
         "description": "The City of Light - Luxury Hotels & Budget Options"
