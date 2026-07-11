@@ -5,6 +5,50 @@ import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime
 import hashlib
+import os
+
+# ======================================================================================
+# --- CONFIGURATION & CITY MAPPING (تعديل المدن والملفات من هنا) ---
+# ======================================================================================
+# يمكنك تعديل أسماء ملفات الاكسل هنا لتطابق ما ترفعه على GitHub
+CITIES_DATA = {
+    "Paris": {
+        "file": "paris 10-7.xlsx", 
+        "emoji": "🗼", 
+        "country": "France"
+    },
+    "Dubai": {
+        "file": "dubai_hotels.xlsx", 
+        "emoji": "🏙️", 
+        "country": "UAE"
+    },
+    "Istanbul": {
+        "file": "istanbul_hotels.xlsx", 
+        "emoji": "🕌", 
+        "country": "Turkey"
+    },
+    "Cairo": {
+        "file": "cairo_hotels.xlsx", 
+        "emoji": "🏛️", 
+        "country": "Egypt"
+    },
+    "New York": {
+        "file": "newyork_hotels.xlsx", 
+        "emoji": "🗽", 
+        "country": "USA"
+    }
+}
+
+# ======================================================================================
+# --- USER CREDENTIALS (قاعدة بيانات المستخدمين) ---
+# ======================================================================================
+USERS_DB = {
+    "test1": "password123",
+    "admin": "admin123",
+    "company_a": "company@123",
+    "blogger_pro": "blogger2024",
+    "travel_agency": "travel@2024"
+}
 
 # ======================================================================================
 # --- PAGE CONFIG & THEME ---
@@ -50,66 +94,80 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ======================================================================================
-# --- USER CREDENTIALS (قاعدة بيانات المستخدمين) ---
+# --- HELPER FUNCTIONS ---
 # ======================================================================================
-USERS_DB = {
-    "test1": "password123",
-    "admin": "admin123",
-    "company_a": "company@123",
-    "blogger_pro": "blogger2024",
-    "travel_agency": "travel@2024"
-}
-
-def hash_password(password):
-    return hashlib.sha256(password.encode()).hexdigest()
-
 def verify_login(username, password):
     if username in USERS_DB:
         return USERS_DB[username] == password
     return False
 
-# ======================================================================================
-# --- CITIES DATA MAPPING (ربط المدن بالبيانات) ---
-# ======================================================================================
-CITIES_DATA = {
-    "Paris": {"file": "paris 10-7.xlsx", "emoji": "🗼", "country": "France"},
-    "Dubai": {"file": "dubai_hotels.xlsx", "emoji": "🏙️", "country": "UAE"},
-    "Istanbul": {"file": "istanbul_hotels.xlsx", "emoji": "🕌", "country": "Turkey"},
-    "Cairo": {"file": "cairo_hotels.xlsx", "emoji": "🏛️", "country": "Egypt"},
-    "New York": {"file": "newyork_hotels.xlsx", "emoji": "🗽", "country": "USA"}
-}
+def find_column(df, possible_names):
+    """البحث عن اسم العمود بغض النظر عن حالة الأحرف أو المسافات"""
+    for name in possible_names:
+        # البحث عن تطابق تام (تجاهل حالة الأحرف)
+        for col in df.columns:
+            if col.strip().lower() == name.lower():
+                return col
+    return None
 
 # ======================================================================================
 # --- DATA LOADING & PROCESSING ---
 # ======================================================================================
 @st.cache_data
 def load_and_process_data(file_path):
+    if not os.path.exists(file_path):
+        return None, f"File not found: {file_path}"
+    
     try:
         df = pd.read_excel(file_path)
         
-        # Clean Prices
-        for col in ['Price1', 'price2', 'price3']:
-            if col in df.columns:
-                df[col] = pd.to_numeric(df[col].astype(str).str.replace(r'[^\d.]', '', regex=True), errors='coerce')
+        # 1. توحيد أسماء الأعمدة (Mapping)
+        col_map = {
+            'Hotel_Name': find_column(df, ['Hotel_Name', 'Hotel Name', 'hotel', 'الاسم']),
+            'Price1': find_column(df, ['Price1', 'price 1', 'سعر 1']),
+            'Price2': find_column(df, ['price2', 'Price2', 'price 2', 'سعر 2']),
+            'Price3': find_column(df, ['price3', 'Price3', 'price 3', 'سعر 3']),
+            'Rate': find_column(df, ['Rate', 'rate', 'التقييم', 'Rating']),
+            'Star': find_column(df, ['Star', 'star', 'النجوم', 'Stars']),
+            'Arrival_Date': find_column(df, ['date of arrival', 'Date of Arrival', 'arrival date', 'تاريخ الوصول']),
+            'Booking_Date': find_column(df, ['date of creat booking', 'Date of Creation', 'booking date', 'تاريخ الحجز']),
+            'Place1': find_column(df, ['Place1', 'place 1', 'منصة 1']),
+            'Place3': find_column(df, ['place3', 'Place3', 'place 3', 'منصة 3']),
+            'Desc': find_column(df, ['Desc', 'description', 'الوصف'])
+        }
         
-        df['Best_Price'] = df[['Price1', 'price2', 'price3']].min(axis=1)
-        df['Rate'] = pd.to_numeric(df['Rate'], errors='coerce')
-        df['Star'] = pd.to_numeric(df['Star'], errors='coerce')
+        # التحقق من وجود الأعمدة الأساسية
+        if not col_map['Hotel_Name'] or not col_map['Price1']:
+            return None, "Essential columns (Hotel Name or Price) are missing in the Excel file."
+
+        # 2. تنظيف البيانات
+        # تنظيف الأسعار
+        price_cols = [col_map['Price1'], col_map['Price2'], col_map['Price3']]
+        price_cols = [c for c in price_cols if c is not None]
         
-        # Handle Dates
-        df['booking_date_dt'] = pd.to_datetime(df['date of creat booking'], errors='coerce')
-        df['arrival_date_dt'] = pd.to_datetime(df['date of arrival'], errors='coerce')
-        df['Arrival_Month'] = df['arrival_date_dt'].dt.strftime('%B')
-        df['Arrival_Day_Name'] = df['arrival_date_dt'].dt.strftime('%A')
+        for col in price_cols:
+            df[col] = pd.to_numeric(df[col].astype(str).str.replace(r'[^\d.]', '', regex=True), errors='coerce')
         
-        # Extract Amenities
-        df['All_Text'] = (df['Desc'].fillna('') + " " + df['Desc2'].fillna('') + " " + 
-                          df['Note 1'].fillna('') + " " + df['Note 2'].fillna('') + " " + df['Note 3'].fillna('')).str.lower()
+        df['Best_Price'] = df[price_cols].min(axis=1)
+        df['Rate'] = pd.to_numeric(df[col_map['Rate']], errors='coerce') if col_map['Rate'] else 0
+        df['Star'] = pd.to_numeric(df[col_map['Star']], errors='coerce') if col_map['Star'] else 0
         
-        return df
+        # تنظيف التواريخ
+        if col_map['Arrival_Date']:
+            df['arrival_date_dt'] = pd.to_datetime(df[col_map['Arrival_Date']], errors='coerce')
+            df['Arrival_Month'] = df['arrival_date_dt'].dt.strftime('%B')
+            df['Arrival_Day_Name'] = df['arrival_date_dt'].dt.strftime('%A')
+        else:
+            df['arrival_date_dt'] = pd.NaT
+            df['Arrival_Month'] = "Unknown"
+            df['Arrival_Day_Name'] = "Unknown"
+            
+        # حفظ أسماء الأعمدة الأصلية للاستخدام لاحقاً
+        df._col_map = col_map
+        
+        return df, None
     except Exception as e:
-        st.error(f"Error loading data: {e}")
-        return None
+        return None, f"Error processing data: {str(e)}"
 
 # ======================================================================================
 # --- LOGIN PAGE ---
@@ -123,11 +181,6 @@ def show_login_page():
         st.markdown("<h3 style='text-align: center; color: #667eea;'>تحليلات الفنادق الاحترافية</h3>", unsafe_allow_html=True)
         st.markdown("---")
         
-        st.markdown("<h4 style='text-align: center;'>Professional Hotel Data Intelligence</h4>", unsafe_allow_html=True)
-        st.markdown("<p style='text-align: center; color: #7f8c8d;'>Unlock hotel market insights | اكتشف أسرار سوق الفنادق</p>", unsafe_allow_html=True)
-        
-        st.markdown("---")
-        
         username = st.text_input("👤 Username", placeholder="Enter your username")
         password = st.text_input("🔐 Password", type="password", placeholder="Enter your password")
         
@@ -135,13 +188,12 @@ def show_login_page():
             if verify_login(username, password):
                 st.session_state.logged_in = True
                 st.session_state.username = username
-                st.success(f"✅ Welcome {username}!")
                 st.rerun()
             else:
                 st.error("❌ Invalid username or password!")
         
         st.markdown("---")
-        st.markdown("<p style='text-align: center; font-size: 12px; color: #95a5a6;'>Demo Credentials:<br>test1/password123 | admin/admin123</p>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; font-size: 12px; color: #95a5a6;'>Demo: test1 / password123</p>", unsafe_allow_html=True)
 
 # ======================================================================================
 # --- MAIN DASHBOARD ---
@@ -169,10 +221,11 @@ def show_dashboard():
     
     # Load data
     file_path = CITIES_DATA[selected_city]['file']
-    df = load_and_process_data(file_path)
+    df, error = load_and_process_data(file_path)
     
-    if df is None:
-        st.warning(f"⚠️ Data file for {selected_city} not found. Using sample data.")
+    if error:
+        st.error(f"⚠️ {error}")
+        st.info(f"Please make sure the file '{file_path}' is uploaded to GitHub and has the correct columns.")
         return
     
     st.success(f"✅ Loaded {len(df)} records for {selected_city}")
@@ -187,52 +240,34 @@ def show_dashboard():
         "🔍 Hotel Tracker"
     ])
     
+    col_map = df._col_map
+    hotel_col = col_map['Hotel_Name']
+    
     # ==================== TAB 1: DASHBOARD ====================
     with tab1:
         st.markdown("### 📊 Market Overview | نظرة عامة على السوق")
         
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-            st.metric("📍 Total Hotels", len(df['Hotel_Name'].unique()), delta="Hotels in database")
+            st.metric("📍 Total Hotels", len(df[hotel_col].unique()))
         with col2:
-            st.metric("💰 Avg Price", f"${df['Best_Price'].mean():.0f}", delta=f"${df['Best_Price'].std():.0f} std dev")
+            st.metric("💰 Avg Price", f"${df['Best_Price'].mean():.0f}")
         with col3:
-            st.metric("⭐ Avg Rating", f"{df['Rate'].mean():.1f}", delta="out of 10")
+            st.metric("⭐ Avg Rating", f"{df['Rate'].mean():.1f}")
         with col4:
-            st.metric("🌟 Avg Stars", f"{df['Star'].mean():.1f}", delta="stars")
+            st.metric("🌟 Avg Stars", f"{df['Star'].mean():.1f}")
         
         st.markdown("---")
         
-        # Price Distribution Chart
         col1, col2 = st.columns(2)
-        
         with col1:
-            st.markdown("### 💵 Price Distribution")
-            fig_price = px.histogram(df, x='Best_Price', nbins=30, title="Price Distribution",
-                                     labels={'Best_Price': 'Price ($)', 'count': 'Number of Hotels'},
-                                     color_discrete_sequence=['#667eea'])
-            fig_price.update_layout(height=400, showlegend=False)
+            fig_price = px.histogram(df, x='Best_Price', nbins=30, title="Price Distribution", color_discrete_sequence=['#667eea'])
             st.plotly_chart(fig_price, use_container_width=True)
-        
         with col2:
-            st.markdown("### ⭐ Rating Distribution")
-            fig_rating = px.histogram(df, x='Rate', nbins=20, title="Rating Distribution",
-                                      labels={'Rate': 'Rating', 'count': 'Number of Hotels'},
-                                      color_discrete_sequence=['#764ba2'])
-            fig_rating.update_layout(height=400, showlegend=False)
+            fig_rating = px.histogram(df, x='Rate', nbins=20, title="Rating Distribution", color_discrete_sequence=['#764ba2'])
             st.plotly_chart(fig_rating, use_container_width=True)
-        
-        # Star Category Breakdown
-        st.markdown("### 🏨 Hotels by Star Category")
-        star_counts = df['Star'].value_counts().sort_index(ascending=False)
-        fig_stars = px.bar(x=star_counts.index, y=star_counts.values, 
-                          labels={'x': 'Star Rating', 'y': 'Number of Hotels'},
-                          title="Hotel Distribution by Stars",
-                          color_discrete_sequence=['#667eea'])
-        fig_stars.update_layout(height=400, showlegend=False)
-        st.plotly_chart(fig_stars, use_container_width=True)
     
-    # ==================== TAB 2: MARKET EXTREMES (WITH BOOKING PLATFORMS) ====================
+    # ==================== TAB 2: MARKET EXTREMES ====================
     with tab2:
         st.markdown("### 💎 Market Extremes | أبطال السوق")
         
@@ -242,201 +277,68 @@ def show_dashboard():
         col1, col2 = st.columns(2)
         
         with col1:
-            st.markdown("### 🟢 Cheapest Deal Ever | أرخص صفقة")
+            st.markdown("### 🟢 Cheapest Deal Ever")
             st.info(f"""
-            **Hotel:** {abs_cheapest['Hotel_Name']}
+            **Hotel:** {abs_cheapest[hotel_col]}
             **Price:** ${abs_cheapest['Best_Price']:.0f}
             **Rating:** {abs_cheapest['Rate']} ⭐
-            **Stars:** {abs_cheapest['Star']} 🌟
             **Arrival:** {abs_cheapest['arrival_date_dt'].strftime('%d %B %Y') if pd.notnull(abs_cheapest['arrival_date_dt']) else 'N/A'}
-            **Day:** {abs_cheapest['Arrival_Day_Name']}
             """)
-            
-            # Booking Platforms for Cheapest
-            st.markdown("#### 🔗 Booking Platforms | منصات الحجز:")
-            if pd.notnull(abs_cheapest['Place1']):
-                st.markdown(f"""<div class='booking-platform'>
-                <strong>Primary Platform:</strong> {abs_cheapest['Place1']}
-                </div>""", unsafe_allow_html=True)
-            if pd.notnull(abs_cheapest['place3']):
-                st.markdown(f"""<div class='booking-platform'>
-                <strong>Alternative Platform:</strong> {abs_cheapest['place3']}
-                </div>""", unsafe_allow_html=True)
+            if col_map['Place1'] and pd.notnull(abs_cheapest[col_map['Place1']]):
+                st.markdown(f"<div class='booking-platform'><strong>Platform 1:</strong> {abs_cheapest[col_map['Place1']]}</div>", unsafe_allow_html=True)
+            if col_map['Place3'] and pd.notnull(abs_cheapest[col_map['Place3']]):
+                st.markdown(f"<div class='booking-platform'><strong>Platform 2:</strong> {abs_cheapest[col_map['Place3']]}</div>", unsafe_allow_html=True)
         
         with col2:
-            st.markdown("### 🔴 Most Expensive Record | أغلى سعر")
+            st.markdown("### 🔴 Most Expensive Record")
             st.warning(f"""
-            **Hotel:** {abs_expensive['Hotel_Name']}
+            **Hotel:** {abs_expensive[hotel_col]}
             **Price:** ${abs_expensive['Best_Price']:.0f}
             **Rating:** {abs_expensive['Rate']} ⭐
-            **Stars:** {abs_expensive['Star']} 🌟
             **Arrival:** {abs_expensive['arrival_date_dt'].strftime('%d %B %Y') if pd.notnull(abs_expensive['arrival_date_dt']) else 'N/A'}
-            **Day:** {abs_expensive['Arrival_Day_Name']}
             """)
-            
-            # Booking Platforms for Most Expensive
-            st.markdown("#### 🔗 Booking Platforms | منصات الحجز:")
-            if pd.notnull(abs_expensive['Place1']):
-                st.markdown(f"""<div class='booking-platform'>
-                <strong>Primary Platform:</strong> {abs_expensive['Place1']}
-                </div>""", unsafe_allow_html=True)
-            if pd.notnull(abs_expensive['place3']):
-                st.markdown(f"""<div class='booking-platform'>
-                <strong>Alternative Platform:</strong> {abs_expensive['place3']}
-                </div>""", unsafe_allow_html=True)
-        
-        st.markdown("---")
-        
-        # Price Range Analysis
-        st.markdown("### 📊 Price Range Comparison")
-        price_stats = {
-            'Metric': ['Minimum', 'Maximum', 'Average', 'Median', 'Std Dev'],
-            'Price ($)': [
-                f"${df['Best_Price'].min():.0f}",
-                f"${df['Best_Price'].max():.0f}",
-                f"${df['Best_Price'].mean():.0f}",
-                f"${df['Best_Price'].median():.0f}",
-                f"${df['Best_Price'].std():.0f}"
-            ]
-        }
-        st.dataframe(pd.DataFrame(price_stats), use_container_width=True)
-    
-    # ==================== TAB 3: TRENDS & SEASONALITY ====================
+            if col_map['Place1'] and pd.notnull(abs_expensive[col_map['Place1']]):
+                st.markdown(f"<div class='booking-platform'><strong>Platform 1:</strong> {abs_expensive[col_map['Place1']]}</div>", unsafe_allow_html=True)
+            if col_map['Place3'] and pd.notnull(abs_expensive[col_map['Place3']]):
+                st.markdown(f"<div class='booking-platform'><strong>Platform 2:</strong> {abs_expensive[col_map['Place3']]}</div>", unsafe_allow_html=True)
+
+    # ==================== TAB 3: TRENDS ====================
     with tab3:
-        st.markdown("### 📈 Market Trends & Seasonality | الاتجاهات والمواسم")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown("### 📅 Monthly Trends")
+        st.markdown("### 📈 Trends & Seasonality")
+        if 'Arrival_Month' in df.columns and df['Arrival_Month'].iloc[0] != "Unknown":
             monthly_avg = df.groupby('Arrival_Month')['Best_Price'].mean().sort_values()
-            fig_monthly = px.bar(x=monthly_avg.index, y=monthly_avg.values,
-                                labels={'x': 'Month', 'y': 'Average Price ($)'},
-                                title="Average Price by Month",
-                                color_discrete_sequence=['#667eea'])
-            fig_monthly.update_layout(height=400, xaxis_tickangle=-45)
+            fig_monthly = px.bar(x=monthly_avg.index, y=monthly_avg.values, title="Avg Price by Month")
             st.plotly_chart(fig_monthly, use_container_width=True)
-        
-        with col2:
-            st.markdown("### 📆 Day of Week Trends")
-            day_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-            daily_avg = df.groupby('Arrival_Day_Name')['Best_Price'].mean().reindex(day_order)
-            fig_daily = px.bar(x=daily_avg.index, y=daily_avg.values,
-                              labels={'x': 'Day', 'y': 'Average Price ($)'},
-                              title="Average Price by Day of Week",
-                              color_discrete_sequence=['#764ba2'])
-            fig_daily.update_layout(height=400, xaxis_tickangle=-45)
+            
+            daily_avg = df.groupby('Arrival_Day_Name')['Best_Price'].mean()
+            fig_daily = px.bar(x=daily_avg.index, y=daily_avg.values, title="Avg Price by Day of Week")
             st.plotly_chart(fig_daily, use_container_width=True)
-        
-        st.markdown("---")
-        
-        # Insights
-        col1, col2 = st.columns(2)
-        with col1:
-            best_month = monthly_avg.idxmin()
-            worst_month = monthly_avg.idxmax()
-            st.success(f"✅ **Cheapest Month:** {best_month} (${monthly_avg.min():.0f})")
-            st.error(f"❌ **Most Expensive Month:** {worst_month} (${monthly_avg.max():.0f})")
-        
-        with col2:
-            best_day = daily_avg.idxmin()
-            worst_day = daily_avg.idxmax()
-            st.success(f"✅ **Cheapest Day:** {best_day} (${daily_avg.min():.0f})")
-            st.error(f"❌ **Most Expensive Day:** {worst_day} (${daily_avg.max():.0f})")
-    
+        else:
+            st.info("Date information is missing to show trends.")
+
     # ==================== TAB 4: TOP RANKINGS ====================
     with tab4:
-        st.markdown("### 🏆 Top Rankings | أفضل الفنادق")
-        
-        df_unique = df.sort_values(['Rate', 'Best_Price'], ascending=[False, True]).drop_duplicates(subset=['Hotel_Name'])
-        
+        st.markdown("### 🏆 Top Rankings")
+        df_unique = df.sort_values(['Rate', 'Best_Price'], ascending=[False, True]).drop_duplicates(subset=[hotel_col])
         for star in [5, 4, 3]:
-            st.markdown(f"### ⭐ Top 5 Hotels - {star} Stars")
-            top_hotels = df_unique[df_unique['Star'] == star].head(5)
-            
-            if not top_hotels.empty:
-                for i, (idx, row) in enumerate(top_hotels.iterrows(), 1):
-                    col1, col2, col3, col4 = st.columns(4)
-                    with col1:
-                        st.metric(f"#{i}", row['Hotel_Name'][:20], f"${row['Best_Price']:.0f}")
-                    with col2:
-                        st.metric("Rating", f"{row['Rate']}", "⭐")
-                    with col3:
-                        st.metric("Stars", f"{row['Star']}", "🌟")
-                    with col4:
-                        st.metric("Price", f"${row['Best_Price']:.0f}", "USD")
+            st.markdown(f"#### ⭐ {star} Stars")
+            top = df_unique[df_unique['Star'] == star].head(5)
+            if not top.empty:
+                st.table(top[[hotel_col, 'Best_Price', 'Rate']])
             else:
-                st.info(f"No {star}-star hotels available")
-            st.markdown("---")
-    
-    # ==================== TAB 5: HOTEL TRACKER (WITH BOOKING PLATFORMS) ====================
+                st.write("No data for this category")
+
+    # ==================== TAB 5: HOTEL TRACKER ====================
     with tab5:
-        st.markdown("### 🔍 Track Specific Hotel | تتبع فندق محدد")
+        st.markdown("### 🔍 Hotel Tracker")
+        hotel_list = sorted(df[hotel_col].unique())
+        target = st.selectbox("Select Hotel:", hotel_list)
+        h_data = df[df[hotel_col] == target].sort_values('arrival_date_dt')
         
-        hotel_names = sorted(df['Hotel_Name'].unique())
-        selected_hotel = st.selectbox("Select a hotel to track:", hotel_names)
-        
-        hotel_data = df[df['Hotel_Name'] == selected_hotel]
-        
-        if not hotel_data.empty:
-            cheapest = hotel_data.loc[hotel_data['Best_Price'].idxmin()]
-            expensive = hotel_data.loc[hotel_data['Best_Price'].idxmax()]
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.markdown("### 🟢 Cheapest Record")
-                st.info(f"""
-                **Price:** ${cheapest['Best_Price']:.0f}
-                **Date:** {cheapest['arrival_date_dt'].strftime('%d %B %Y') if pd.notnull(cheapest['arrival_date_dt']) else 'N/A'}
-                **Day:** {cheapest['Arrival_Day_Name']}
-                **Rating:** {cheapest['Rate']} ⭐
-                """)
-                
-                # Booking Platforms
-                st.markdown("#### 🔗 Booking Platforms:")
-                if pd.notnull(cheapest['Place1']):
-                    st.markdown(f"""<div class='booking-platform'>
-                    <strong>Primary:</strong> {cheapest['Place1']}
-                    </div>""", unsafe_allow_html=True)
-                if pd.notnull(cheapest['place3']):
-                    st.markdown(f"""<div class='booking-platform'>
-                    <strong>Alternative:</strong> {cheapest['place3']}
-                    </div>""", unsafe_allow_html=True)
-            
-            with col2:
-                st.markdown("### 🔴 Most Expensive Record")
-                st.warning(f"""
-                **Price:** ${expensive['Best_Price']:.0f}
-                **Date:** {expensive['arrival_date_dt'].strftime('%d %B %Y') if pd.notnull(expensive['arrival_date_dt']) else 'N/A'}
-                **Day:** {expensive['Arrival_Day_Name']}
-                **Rating:** {expensive['Rate']} ⭐
-                """)
-                
-                # Booking Platforms
-                st.markdown("#### 🔗 Booking Platforms:")
-                if pd.notnull(expensive['Place1']):
-                    st.markdown(f"""<div class='booking-platform'>
-                    <strong>Primary:</strong> {expensive['Place1']}
-                    </div>""", unsafe_allow_html=True)
-                if pd.notnull(expensive['place3']):
-                    st.markdown(f"""<div class='booking-platform'>
-                    <strong>Alternative:</strong> {expensive['place3']}
-                    </div>""", unsafe_allow_html=True)
-            
-            st.markdown("---")
-            
-            # Price History Chart
-            st.markdown("### 📊 Price History")
-            hotel_data_sorted = hotel_data.sort_values('arrival_date_dt')
-            fig_history = px.line(hotel_data_sorted, x='arrival_date_dt', y='Best_Price',
-                                 title=f"Price History - {selected_hotel}",
-                                 labels={'arrival_date_dt': 'Date', 'Best_Price': 'Price ($)'},
-                                 markers=True)
-            fig_history.update_layout(height=400)
-            st.plotly_chart(fig_history, use_container_width=True)
-        else:
-            st.warning("Hotel not found in database")
+        if not h_data.empty:
+            st.line_chart(h_data.set_index('arrival_date_dt')['Best_Price'])
+            st.write(f"**Best Price Found:** ${h_data['Best_Price'].min():.0f}")
+            st.write(f"**Highest Price Found:** ${h_data['Best_Price'].max():.0f}")
 
 # ======================================================================================
 # --- MAIN APP LOGIC ---
