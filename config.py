@@ -20,7 +20,7 @@ USERS = {
 
 # ==================== CITIES CONFIGURATION ====================
 # Format: "City_Name": {
-#     "file": "path_to_excel_file.xlsx",
+#     "file": "paris 10-7.xlsx",
 #     "emoji": "🏙️",
 #     "country": "Country Name"
 # }
@@ -33,43 +33,43 @@ CITIES = {
         "description": "The City of Light - Luxury Hotels & Budget Options"
     },
     "Dubai": {
-        "file": "dubai_hotels.xlsx",
+        "file": "paris 10-7.xlsx",
         "emoji": "🏙️",
         "country": "UAE",
         "description": "Luxury Desert Destination - Premium Hotels"
     },
     "Istanbul": {
-        "file": "istanbul_hotels.xlsx",
+        "file": "paris 10-7.xlsx",
         "emoji": "🕌",
         "country": "Turkey",
         "description": "Bridge Between Continents - Historic & Modern Hotels"
     },
     "Cairo": {
-        "file": "cairo_hotels.xlsx",
+        "file": "paris 10-7.xlsx",
         "emoji": "🏛️",
         "country": "Egypt",
         "description": "Ancient Wonders - Cultural Hub Hotels"
     },
     "New York": {
-        "file": "newyork_hotels.xlsx",
+        "file": "paris 10-7.xlsx",
         "emoji": "🗽",
         "country": "USA",
         "description": "The City That Never Sleeps - Diverse Hotel Options"
     },
     "Tokyo": {
-        "file": "tokyo_hotels.xlsx",
+        "file": "paris 10-7.xlsx",
         "emoji": "🗾",
         "country": "Japan",
         "description": "Modern Metropolis - High-Tech Hotels"
     },
     "London": {
-        "file": "london_hotels.xlsx",
+        "file": "paris 10-7.xlsx",
         "emoji": "🎡",
         "country": "UK",
         "description": "Historic Capital - Elegant Hotels"
     },
     "Barcelona": {
-        "file": "barcelona_hotels.xlsx",
+        "file": "paris 10-7.xlsx",
         "emoji": "🏖️",
         "country": "Spain",
         "description": "Mediterranean Beauty - Beach & City Hotels"
