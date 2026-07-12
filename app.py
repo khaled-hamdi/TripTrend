@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 import os
 
 # ======================================================================================
-# --- CONFIGURATION & USERS (تحديث التواريخ لعام 2026) ---
+# --- CONFIGURATION & USERS ---
 # ======================================================================================
 USERS_DB = {
     "admin": {"password": "admin123", "created_at": "2026-01-01", "role": "admin"},
@@ -27,16 +27,7 @@ CITIES_DATA = {
 # ======================================================================================
 # --- PAGE CONFIG ---
 # ======================================================================================
-st.set_page_config(page_title="Hotel Analytics Pro V9", page_icon="🚀", layout="wide")
-
-st.markdown("""
-    <style>
-    .main { background-color: #f8f9fa; }
-    .hotel-card { background: white; padding: 20px; border-radius: 15px; border-left: 5px solid #667eea; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 20px; }
-    .stat-box { text-align: center; padding: 10px; background: #f1f5f9; border-radius: 8px; }
-    .deal-badge { background: #ff4b4b; color: white; padding: 4px 12px; border-radius: 20px; font-weight: bold; font-size: 12px; }
-    </style>
-""", unsafe_allow_html=True)
+st.set_page_config(page_title="Hotel Analytics Pro V10", page_icon="🚀", layout="wide")
 
 # ======================================================================================
 # --- CORE FUNCTIONS ---
@@ -59,7 +50,7 @@ def load_data(file_path):
             'P3': find_column(df, ['price3', 'Price3', 'price 3', 'سعر 3']),
             'Rate': find_column(df, ['Rate', 'rate', 'التقييم', 'Rating']),
             'Star': find_column(df, ['Star', 'star', 'النجوم', 'Stars']),
-            'Arrival': find_column(df, ['date of arrival', 'Date of Arrival', 'arrival date', 'تاريخ الوصول']),
+            'Arrival': find_column(df, ['date of arrival', 'Date of Arrival', 'arrival date', 'تاريخ الوصول', 'arrival']),
             'Place1': find_column(df, ['Place1', 'place 1', 'منصة 1']),
             'Place3': find_column(df, ['place3', 'Place3', 'place 3', 'منصة 3']),
             'Desc': find_column(df, ['Desc', 'description', 'الوصف']),
@@ -84,26 +75,25 @@ def load_data(file_path):
     except Exception as e: return None, None, str(e)
 
 def show_hotel_card(row, col_map, city):
-    with st.container():
-        st.markdown(f"""
-        <div class="hotel-card">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <h4>🏨 {row[col_map['Hotel']]}</h4>
-                {f'<span class="deal-badge">🔥 HOT DEAL</span>' if row['Best_Price'] < 150 else ''}
-            </div>
-            <div style="display: flex; justify-content: space-between; margin: 15px 0;">
-                <div class="stat-box">💰 Price<br><b>${row['Best_Price']:.0f}</b></div>
-                <div class="stat-box">⭐ Rate<br><b>{row['Rate']}/10</b></div>
-                <div class="stat-box">🌟 Stars<br><b>{row['Star']}</b></div>
-            </div>
-            <p style="font-size:14px; color:#64748b;">
-                📍 <b>Dist:</b> {row[col_map['Dist']] if col_map['Dist'] else 'N/A'} | 
-                🔗 <b>Platforms:</b> {row[col_map['Place1']]} / {row[col_map['Place3']]}
-            </p>
-        """, unsafe_allow_html=True)
+    # استخدام st.container بدلاً من HTML المباشر لتجنب مشاكل العرض
+    with st.container(border=True):
+        c1, c2 = st.columns([3, 1])
+        with c1:
+            st.subheader(f"🏨 {row[col_map['Hotel']]}")
+        with c2:
+            if row['Best_Price'] < 150:
+                st.error("🔥 HOT DEAL")
+        
+        m1, m2, m3 = st.columns(3)
+        m1.metric("💰 Price", f"${row['Best_Price']:.0f}")
+        m2.metric("⭐ Rate", f"{row['Rate']}/10")
+        m3.metric("🌟 Stars", f"{int(row['Star'])}")
+        
+        st.write(f"📍 **Dist:** {row[col_map['Dist']] if col_map['Dist'] else 'N/A'}")
+        st.write(f"🔗 **Platforms:** {row[col_map['Place1']]} / {row[col_map['Place3']]}")
         
         with st.expander("🤳 Blogger AI Assistant"):
-            lang = st.radio("Select Language | اختر اللغة", ["Arabic", "English"], key=f"lang_{row.name}", horizontal=True)
+            lang = st.radio("Select Language", ["Arabic", "English"], key=f"lang_{row.name}", horizontal=True)
             hotel = row[col_map['Hotel']]
             price = row['Best_Price']
             stars = "⭐" * int(row['Star'])
@@ -112,10 +102,7 @@ def show_hotel_card(row, col_map, city):
                 post = f"🌟 عرض لا يفوت في {city}! 🌟\n\nفندق {hotel} {stars}\n💰 السعر: ${price:.0f} فقط!\n⭐ التقييم: {row['Rate']}/10\n📍 الموقع: {row[col_map['Dist']] if col_map['Dist'] else 'ممتاز'}\n\nاحجز الآن قبل فوات الأوان! ✈️ #سياحة #فنادق #{city}"
             else:
                 post = f"🌟 Unmissable Deal in {city}! 🌟\n\n{hotel} {stars}\n💰 Price: ${price:.0f} only!\n⭐ Rating: {row['Rate']}/10\n📍 Location: {row[col_map['Dist']] if col_map['Dist'] else 'Prime Location'}\n\nBook now before it's gone! ✈️ #Travel #Hotels #{city}"
-            
             st.code(post, language="text")
-        
-        st.markdown("</div>", unsafe_allow_html=True)
 
 # ======================================================================================
 # --- MAIN APP ---
@@ -124,7 +111,7 @@ def main():
     if 'logged_in' not in st.session_state: st.session_state.logged_in = False
     
     if not st.session_state.logged_in:
-        st.title("🏨 Hotel Analytics Pro V9")
+        st.title("🏨 Hotel Analytics Pro V10")
         u = st.text_input("Username")
         p = st.text_input("Password", type="password")
         if st.button("Login"):
@@ -172,20 +159,26 @@ def main():
 
     with t3:
         st.markdown("### 📅 Best Arrival Days")
-        if 'Day' in df.columns and df['Day'].iloc[0] != "Unknown":
+        # محاولة ذكية لإيجاد التواريخ إذا كانت مفقودة
+        if 'Day' in df.columns and not df['Day'].isnull().all() and df['Day'].iloc[0] != "Unknown":
             day_avg = df.groupby('Day')['Best_Price'].mean().sort_values()
             cols = st.columns(len(day_avg))
             for i, (d, p) in enumerate(day_avg.items()):
-                cols[i].markdown(f"<div style='text-align:center;'><b>{d}</b><br>${p:.0f}</div>", unsafe_allow_html=True)
+                cols[i].metric(d, f"${p:.0f}")
             st.plotly_chart(px.bar(x=day_avg.index, y=day_avg.values, title="Price by Day"), use_container_width=True)
-        else: st.warning("Date information missing in Excel file.")
+        else:
+            st.warning("⚠️ Date information missing or invalid in Excel file.")
+            st.info("Please ensure your Excel has a column named 'date of arrival'.")
 
     with t4:
         st.markdown("### 🏆 Top Rankings")
         df_u = df.sort_values(['Rate', 'Best_Price'], ascending=[False, True]).drop_duplicates(subset=[col_map['Hotel']])
         for s in [5, 4, 3]:
             st.markdown(f"#### ⭐ {s} Star Excellence")
-            for _, row in df_u[df_u['Star'] == s].head(3).iterrows(): show_hotel_card(row, col_map, city)
+            stars_df = df_u[df_u['Star'] == s]
+            if not stars_df.empty:
+                for _, row in stars_df.head(3).iterrows(): show_hotel_card(row, col_map, city)
+            else: st.info(f"No {s}-star hotels found.")
 
     with t5:
         st.markdown("### 🔍 Professional Tracker")
