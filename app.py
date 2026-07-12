@@ -23,7 +23,13 @@ CITIES_DATA = {
     "Istanbul": {"file": "istanbul_hotels.xlsx", "emoji": "🕌", "country": "Turkey"},
     "Cairo": {"file": "cairo_hotels.xlsx", "emoji": "🏛️", "country": "Egypt"}
 }
+df.columns = df.columns.str.strip().str.lower()
 
+# 2. إذا كان الكود في مكان آخر يبحث عن 'Day'، تأكد من تجهيزه بناءً على 'date of arrival'
+if 'date of arrival' in df.columns:
+    # تحويل العمود إلى صيغة تاريخ للتأكد من عمله بشكل صحيح
+    df['date of arrival'] = pd.to_datetime(df['date of arrival'], errors='coerce')
+    
 # ======================================================================================
 # --- PAGE CONFIG ---
 # ======================================================================================
