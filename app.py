@@ -7,18 +7,18 @@ from datetime import datetime, timedelta
 import os
 
 # ======================================================================================
-# --- CONFIGURATION & USERS ---
+# --- CONFIGURATION & USERS (تحديث التواريخ لعام 2026) ---
 # ======================================================================================
 USERS_DB = {
-    "admin": {"password": "admin123", "created_at": "2024-01-01", "role": "admin"},
-    "test1": {"password": "password123", "created_at": "2024-07-01", "role": "user"},
-    "company_a": {"password": "company@123", "created_at": "2024-07-10", "role": "user"},
-    "blogger_pro": {"password": "blogger2024", "created_at": "2024-07-11", "role": "user"},
+    "admin": {"password": "admin123", "created_at": "2026-01-01", "role": "admin"},
+    "test1": {"password": "password123", "created_at": "2026-07-01", "role": "user"},
+    "company_a": {"password": "company@123", "created_at": "2026-07-10", "role": "user"},
+    "blogger_pro": {"password": "blogger2024", "created_at": "2026-07-11", "role": "user"},
     "new_client": {"password": "test@2024", "created_at": "2026-07-12", "role": "user"}
 }
 
 CITIES_DATA = {
-    "Paris": {"file": "paris 10-7.xlsx", "emoji": "🗼", "country": "France"},
+    "Paris": {"file": "subjectsanalysis.xlsx", "emoji": "🗼", "country": "France"},
     "Dubai": {"file": "dubai_hotels.xlsx", "emoji": "🏙️", "country": "UAE"},
     "Istanbul": {"file": "istanbul_hotels.xlsx", "emoji": "🕌", "country": "Turkey"},
     "Cairo": {"file": "cairo_hotels.xlsx", "emoji": "🏛️", "country": "Egypt"}
@@ -27,15 +27,14 @@ CITIES_DATA = {
 # ======================================================================================
 # --- PAGE CONFIG ---
 # ======================================================================================
-st.set_page_config(page_title="Hotel Analytics Pro V8 - Creator Edition", page_icon="🚀", layout="wide")
+st.set_page_config(page_title="Hotel Analytics Pro V9", page_icon="🚀", layout="wide")
 
 st.markdown("""
     <style>
     .main { background-color: #f8f9fa; }
     .hotel-card { background: white; padding: 20px; border-radius: 15px; border-left: 5px solid #667eea; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 20px; }
-    .blogger-box { background: #f0f4ff; padding: 15px; border-radius: 10px; border: 1px dashed #667eea; margin-top: 10px; }
-    .deal-badge { background: #ff4b4b; color: white; padding: 4px 12px; border-radius: 20px; font-weight: bold; font-size: 14px; }
     .stat-box { text-align: center; padding: 10px; background: #f1f5f9; border-radius: 8px; }
+    .deal-badge { background: #ff4b4b; color: white; padding: 4px 12px; border-radius: 20px; font-weight: bold; font-size: 12px; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -71,25 +70,20 @@ def load_data(file_path):
         df['Best_Price'] = df[[col_map['P1'], col_map['P2'], col_map['P3']]].min(axis=1)
         df['Rate'] = pd.to_numeric(df[col_map['Rate']], errors='coerce').fillna(0)
         df['Star'] = pd.to_numeric(df[col_map['Star']].astype(str).str.extract('(\d+)')[0], errors='coerce').fillna(0)
+        
         if col_map['Arrival']:
             df['arrival_dt'] = pd.to_datetime(df[col_map['Arrival']], errors='coerce')
             df['Month'] = df['arrival_dt'].dt.strftime('%B')
             df['Day'] = df['arrival_dt'].dt.strftime('%A')
+        else:
+            df['arrival_dt'] = pd.NaT
+            df['Month'] = "Unknown"
+            df['Day'] = "Unknown"
+            
         return df, col_map, None
     except Exception as e: return None, None, str(e)
 
-def generate_blogger_post(row, col_map, city):
-    hotel = row[col_map['Hotel']]
-    price = row['Best_Price']
-    rate = row['Rate']
-    stars = "⭐" * int(row['Star'])
-    
-    arabic_post = f"🌟 عرض لا يفوت في {city}! 🌟\n\nفندق {hotel} {stars}\n💰 السعر: ${price:.0f} فقط!\n⭐ التقييم: {rate}/10\n📍 الموقع: {row[col_map['Dist']] if col_map['Dist'] else 'ممتاز'}\n\nاحجز الآن قبل فوات الأوان! ✈️ #سياحة #فنادق #{city}"
-    english_post = f"🌟 Unmissable Deal in {city}! 🌟\n\n{hotel} {stars}\n💰 Price: ${price:.0f} only!\n⭐ Rating: {rate}/10\n📍 Location: {row[col_map['Dist']] if col_map['Dist'] else 'Prime Location'}\n\nBook now before it's gone! ✈️ #Travel #Hotels #{city}"
-    
-    return arabic_post, english_post
-
-def show_hotel_card(row, col_map, city, show_blogger=True):
+def show_hotel_card(row, col_map, city):
     with st.container():
         st.markdown(f"""
         <div class="hotel-card">
@@ -108,12 +102,18 @@ def show_hotel_card(row, col_map, city, show_blogger=True):
             </p>
         """, unsafe_allow_html=True)
         
-        if show_blogger:
-            with st.expander("🤳 Blogger AI Assistant (Generate Post)"):
-                ar, en = generate_blogger_post(row, col_map, city)
-                st.code(ar, language="text")
-                st.code(en, language="text")
-                st.button("📋 Copy Arabic", key=f"ar_{row.name}", on_click=lambda: st.write("Copied!"))
+        with st.expander("🤳 Blogger AI Assistant"):
+            lang = st.radio("Select Language | اختر اللغة", ["Arabic", "English"], key=f"lang_{row.name}", horizontal=True)
+            hotel = row[col_map['Hotel']]
+            price = row['Best_Price']
+            stars = "⭐" * int(row['Star'])
+            
+            if lang == "Arabic":
+                post = f"🌟 عرض لا يفوت في {city}! 🌟\n\nفندق {hotel} {stars}\n💰 السعر: ${price:.0f} فقط!\n⭐ التقييم: {row['Rate']}/10\n📍 الموقع: {row[col_map['Dist']] if col_map['Dist'] else 'ممتاز'}\n\nاحجز الآن قبل فوات الأوان! ✈️ #سياحة #فنادق #{city}"
+            else:
+                post = f"🌟 Unmissable Deal in {city}! 🌟\n\n{hotel} {stars}\n💰 Price: ${price:.0f} only!\n⭐ Rating: {row['Rate']}/10\n📍 Location: {row[col_map['Dist']] if col_map['Dist'] else 'Prime Location'}\n\nBook now before it's gone! ✈️ #Travel #Hotels #{city}"
+            
+            st.code(post, language="text")
         
         st.markdown("</div>", unsafe_allow_html=True)
 
@@ -124,7 +124,7 @@ def main():
     if 'logged_in' not in st.session_state: st.session_state.logged_in = False
     
     if not st.session_state.logged_in:
-        st.title("🏨 Hotel Analytics Pro V8")
+        st.title("🏨 Hotel Analytics Pro V9")
         u = st.text_input("Username")
         p = st.text_input("Password", type="password")
         if st.button("Login"):
@@ -163,23 +163,25 @@ def main():
         st.plotly_chart(px.histogram(df, x='Best_Price', title="Price Distribution", color_discrete_sequence=['#667eea']), use_container_width=True)
 
     with t2:
-        st.markdown("### 🔥 Deal Radar (Price Drops & Best Values)")
+        st.markdown("### 🔥 Deal Radar")
         avg_p = df['Best_Price'].mean()
-        deals = df[df['Best_Price'] < (avg_p * 0.7)].sort_values('Best_Price')
+        deals = df[df['Best_Price'] < (avg_p * 0.8)].sort_values('Best_Price')
         if not deals.empty:
             for _, row in deals.head(10).iterrows(): show_hotel_card(row, col_map, city)
-        else: st.info("No extreme deals found today. Check back later!")
+        else: st.info("No extreme deals found today.")
 
     with t3:
         st.markdown("### 📅 Best Arrival Days")
-        day_avg = df.groupby('Day')['Best_Price'].mean().sort_values()
-        cols = st.columns(len(day_avg))
-        for i, (d, p) in enumerate(day_avg.items()):
-            cols[i].markdown(f"<div style='text-align:center;'><b>{d}</b><br>${p:.0f}</div>", unsafe_allow_html=True)
-        st.plotly_chart(px.bar(x=day_avg.index, y=day_avg.values, title="Price by Day"), use_container_width=True)
+        if 'Day' in df.columns and df['Day'].iloc[0] != "Unknown":
+            day_avg = df.groupby('Day')['Best_Price'].mean().sort_values()
+            cols = st.columns(len(day_avg))
+            for i, (d, p) in enumerate(day_avg.items()):
+                cols[i].markdown(f"<div style='text-align:center;'><b>{d}</b><br>${p:.0f}</div>", unsafe_allow_html=True)
+            st.plotly_chart(px.bar(x=day_avg.index, y=day_avg.values, title="Price by Day"), use_container_width=True)
+        else: st.warning("Date information missing in Excel file.")
 
     with t4:
-        st.markdown("### 🏆 Top Rankings (Creator Ready)")
+        st.markdown("### 🏆 Top Rankings")
         df_u = df.sort_values(['Rate', 'Best_Price'], ascending=[False, True]).drop_duplicates(subset=[col_map['Hotel']])
         for s in [5, 4, 3]:
             st.markdown(f"#### ⭐ {s} Star Excellence")
@@ -189,8 +191,9 @@ def main():
         st.markdown("### 🔍 Professional Tracker")
         target = st.selectbox("Select Hotel", sorted(df[col_map['Hotel']].unique()))
         h_data = df[df[col_map['Hotel']] == target].sort_values('arrival_dt')
-        st.plotly_chart(px.line(h_data, x='arrival_dt', y='Best_Price', markers=True), use_container_width=True)
-        st.dataframe(h_data[[col_map['Arrival'], 'Best_Price', col_map['Place1'], col_map['Place3']]], use_container_width=True)
+        if not h_data.empty and not h_data['arrival_dt'].isnull().all():
+            st.plotly_chart(px.line(h_data, x='arrival_dt', y='Best_Price', markers=True), use_container_width=True)
+        st.dataframe(h_data[[col_map['Hotel'], 'Best_Price', col_map['Place1'], col_map['Place3']]], use_container_width=True)
 
     with t6:
         st.markdown("### 🌍 City vs City Comparison")
@@ -199,9 +202,8 @@ def main():
         if df2 is not None:
             comp_data = pd.DataFrame({
                 'City': [city, city2],
-                'Avg Price': [df['Best_Price'].mean(), df2['Best_Price'].mean()],
-                'Max Rating': [df['Rate'].max(), df2['Rate'].max()]
+                'Avg Price': [df['Best_Price'].mean(), df2['Best_Price'].mean()]
             })
-            st.plotly_chart(px.bar(comp_data, x='City', y='Avg Price', color='City', title="Average Price Comparison"), use_container_width=True)
+            st.plotly_chart(px.bar(comp_data, x='City', y='Avg Price', color='City'), use_container_width=True)
 
 if __name__ == "__main__": main()
