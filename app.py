@@ -26,7 +26,7 @@ CITIES_DATA = {
 # ======================================================================================
 # --- PAGE CONFIG ---
 # ======================================================================================
-st.set_page_config(page_title="Hotel Analytics Pro V13", page_icon="🚀", layout="wide")
+st.set_page_config(page_title="Hotel Analytics Pro V14", page_icon="🚀", layout="wide")
 
 # ======================================================================================
 # --- CORE FUNCTIONS ---
@@ -53,6 +53,7 @@ def load_data(file_path):
             'P2': find_column(df, ['price2', 'Price2', 'سعر 2']),
             'P3': find_column(df, ['price3', 'Price3', 'سعر 3']),
             'Place1': find_column(df, ['Place1', 'place1', 'منصة 1']),
+            'Place2': find_column(df, ['Place2', 'place2', 'منصة 2']),
             'Place3': find_column(df, ['place3', 'Place3', 'منصة 3']),
             'Arrival': find_column(df, ['date of arrival', 'date_of_arrival', 'تاريخ الوصول', 'arrival']),
             'Booking': find_column(df, ['day of book', 'day_of_book', 'تاريخ الحجز', 'booking']),
@@ -68,7 +69,6 @@ def load_data(file_path):
         df['Rate'] = pd.to_numeric(df[col_map['Rate']], errors='coerce').fillna(0)
         df['Star'] = pd.to_numeric(df[col_map['Star']].astype(str).str.extract(r'(\d+)')[0], errors='coerce').fillna(0)
         
-        # Robust Date Conversion
         if col_map['Arrival']:
             df['arrival_dt'] = pd.to_datetime(df[col_map['Arrival']], errors='coerce')
             df['Month'] = df['arrival_dt'].dt.strftime('%B')
@@ -82,38 +82,75 @@ def load_data(file_path):
         return df, col_map, None
     except Exception as e: return None, None, str(e)
 
-def generate_fun_facts(df, col_map, city, lang):
+def generate_fun_facts(df, col_map, city):
     facts = []
-    if lang == "Arabic":
-        hotel_name_col = col_map.get('Hotel', 'Hotel_Name') # Fallback to 'Hotel_Name' if not in col_map
-        cheapest_hotel = df.loc[df['Best_Price'].idxmin()][hotel_name_col] if not df['Best_Price'].empty and hotel_name_col in df.columns else 'فندق غير معروف'
-        facts.append(f"💰 أرخص فندق في {city} هو {cheapest_hotel} بسعر ${df['Best_Price'].min():.0f} فقط!")
-        if not df['Best_Price'].empty:
-            facts.append(f"📈 فجوة السعر في {city} تصل إلى ${df['Best_Price'].max() - df['Best_Price'].min():.0f} بين أرخص وأغلى فندق.")
-        else:
-            facts.append(f"📈 لا توجد بيانات كافية لحساب فجوة السعر في {city}.")
-        if not df['Rate'].empty:
-            facts.append(f"⭐ متوسط تقييم الفنادق في {city} هو {df['Rate'].mean():.1f}/10.")
-        else:
-            facts.append(f"⭐ لا توجد بيانات تقييم للفنادق في {city}.")
-        if 'days_before' in df.columns:
-            best_window = df.groupby('days_before')['Best_Price'].mean().idxmin()
-            facts.append(f"🎯 نصيحة ذهبية: الحجز قبل {int(best_window)} يوم يمنحك أفضل سعر في {city}!")
-    else:
-        hotel_name_col = col_map.get('Hotel', 'Hotel_Name')
-        cheapest_hotel = df.loc[df['Best_Price'].idxmin()][hotel_name_col] if not df['Best_Price'].empty and hotel_name_col in df.columns else 'Unknown Hotel'
-        facts.append(f"💰 The cheapest hotel in {city} is {cheapest_hotel} for only ${df['Best_Price'].min():.0f}!")
-        if not df['Best_Price'].empty:
-            facts.append(f"📈 Price gap in {city} is ${df['Best_Price'].max() - df['Best_Price'].min():.0f} between min and max.")
-        else:
-            facts.append(f"📈 Not enough data to calculate price gap in {city}.")
-        if not df['Rate'].empty:
-            facts.append(f"⭐ Average hotel rating in {city} is {df['Rate'].mean():.1f}/10.")
-        else:
-            facts.append(f"⭐ No rating data available for hotels in {city}.")
-        if 'days_before' in df.columns:
-            best_window = df.groupby('days_before')['Best_Price'].mean().idxmin()
-            facts.append(f"🎯 Pro Tip: Booking {int(best_window)} days in advance gives you the best price in {city}!")
+    hotel_col = col_map['Hotel']
+    
+    # 1. Price Extremes
+    cheapest = df.loc[df['Best_Price'].idxmin()]
+    expensive = df.loc[df['Best_Price'].idxmax()]
+    facts.append(f"💰 أرخص فندق حالياً هو **{cheapest[hotel_col]}** بسعر ${cheapest['Best_Price']:.0f}.")
+    facts.append(f"💎 أغلى فندق متاح هو **{expensive[hotel_col]}** بسعر ${expensive['Best_Price']:.0f}.")
+    
+    # 2. Ratings
+    top_rated = df.loc[df['Rate'].idxmax()]
+    facts.append(f"🌟 الفندق الأعلى تقييماً هو **{top_rated[hotel_col]}** بتقييم {top_rated['Rate']}/10.")
+    facts.append(f"📈 متوسط تقييمات الفنادق في {city} هو {df['Rate'].mean():.1f}/10.")
+    
+    # 3. Value for Money (Rating/Price)
+    df['Value'] = df['Rate'] / df['Best_Price']
+    best_value = df.loc[df['Value'].idxmax()]
+    facts.append(f"🎯 أفضل قيمة مقابل سعر: **{best_value[hotel_col]}** (تقييم عالٍ بسعر ممتاز).")
+    
+    # 4. Market Gaps
+    gap = df['Best_Price'].max() - df['Best_Price'].min()
+    facts.append(f"↔️ فجوة السعر في السوق تصل إلى ${gap:.0f} بين الأرخص والأغلى.")
+    
+    # 5. Star Analysis
+    for s in [5, 4, 3]:
+        star_df = df[df['Star'] == s]
+        if not star_df.empty:
+            facts.append(f"⭐ متوسط سعر فنادق {s} نجوم هو ${star_df['Best_Price'].mean():.0f}.")
+            
+    # 6. Booking Window
+    if 'days_before' in df.columns:
+        best_window = df.groupby('days_before')['Best_Price'].mean().idxmin()
+        facts.append(f"📅 نصيحة: الحجز قبل {int(best_window)} يوم يوفر لك أكبر قدر من المال.")
+        
+    # 7. Location Density
+    if col_map['Location']:
+        top_loc = df[col_map['Location']].value_counts().idxmax()
+        facts.append(f"📍 منطقة **{top_loc}** هي الأكثر كثافة فندقية في {city}.")
+        
+    # 8. Competition
+    if col_map['Place1']:
+        top_platform = df[col_map['Place1']].value_counts().idxmax()
+        facts.append(f"🌐 منصة **{top_platform}** تقدم أكبر عدد من العروض حالياً.")
+        
+    # 9. Arrival Days
+    if 'Day' in df.columns:
+        cheapest_day = df.groupby('Day')['Best_Price'].mean().idxmin()
+        facts.append(f"🗓️ الوصول يوم **{cheapest_day}** غالباً ما يكون الأرخص سعراً.")
+        
+    # 10. Discount Potential
+    df['Price_Range'] = df[[col_map['P1'], col_map['P2'], col_map['P3']]].max(axis=1) - df['Best_Price']
+    max_diff = df.loc[df['Price_Range'].idxmax()]
+    facts.append(f"💸 فندق **{max_diff[hotel_col]}** لديه أكبر تفاوت في الأسعار بين المنصات (${df['Price_Range'].max():.0f}).")
+
+    # 11-20: Dynamic stats
+    facts.append(f"🏨 إجمالي الفنادق المحللة في {city}: {len(df)} فندق.")
+    facts.append(f"📉 {len(df[df['Best_Price'] < df['Best_Price'].mean()])} فندق أسعارهم أقل من المتوسط.")
+    facts.append(f"🏆 {len(df[df['Rate'] > 8])} فندق حصلوا على تقييم 'ممتاز' (أعلى من 8).")
+    
+    if col_map['Dist']:
+        df['dist_num'] = pd.to_numeric(df[col_map['Dist']].astype(str).str.extract(r'(\d+)')[0], errors='coerce')
+        closest = df.loc[df['dist_num'].idxmin()]
+        facts.append(f"🚶 **{closest[hotel_col]}** هو الأقرب للمعالم السياحية ({closest[col_map['Dist']]}).")
+        
+    facts.append(f"📊 {city} تمتلك تنوعاً سعرياً بنسبة { (df['Best_Price'].std() / df['Best_Price'].mean() * 100):.1f}%.")
+    facts.append(f"✨ {len(df[df['Star'] == 5])} فندق من فئة 5 نجوم تتنافس على جذب السياح.")
+    facts.append(f"🔔 تم تحديث هذه الإحصائيات بتاريخ {datetime.now().strftime('%Y-%m-%d')}.")
+    
     return facts
 
 # ======================================================================================
@@ -123,7 +160,7 @@ def main():
     if 'logged_in' not in st.session_state: st.session_state.logged_in = False
     
     if not st.session_state.logged_in:
-        st.title("🏨 Hotel Analytics Pro V13")
+        st.title("🏨 Hotel Analytics Pro V14")
         u = st.text_input("Username")
         p = st.text_input("Password", type="password")
         if st.button("Login"):
@@ -136,21 +173,7 @@ def main():
             else: st.error("Invalid Login")
         return
 
-    # Sidebar
     st.sidebar.title(f"🚀 {st.session_state.username}")
-    
-    if st.session_state.role == 'admin':
-        if st.sidebar.checkbox("👑 Admin Panel"):
-            st.markdown("### 📊 Admin Dashboard")
-            c1, c2 = st.columns(2)
-            c1.metric("👥 Total Users", len(USERS_DB))
-            c2.metric("👁️ Page Views", st.session_state.get('page_views', 0))
-            
-            st.markdown("#### 📂 File Status")
-            for city, data in CITIES_DATA.items():
-                status = "✅" if os.path.exists(data['file']) else "❌"
-                st.write(f"{status} **{city}:** {data['file']}")
-
     city = st.sidebar.selectbox("Select City", list(CITIES_DATA.keys()))
     df, col_map, err = load_data(CITIES_DATA[city]['file'])
     
@@ -158,31 +181,26 @@ def main():
         st.warning(f"⚠️ {err}")
         return
 
-    # Page Selection
     page_map = {
         "dashboard": "📊 Dashboard",
         "trends": "📈 Trends",
         "rankings": "🏆 Rankings",
-        "tracker": "🔍 Tracker",
+        "tracker": "🔍 Professional Tracker",
         "fun_facts": "🎉 Fun Facts",
         "location": "📍 By Location",
-        "competitor": "⚔️ Competitor Price",
+        "competitor": "⚔️ Competitor Analysis",
         "compare": "📊 Price Compare"
     }
     
     if "all" in st.session_state.allowed_pages:
         available_pages = list(page_map.values())
     else:
-        # Map existing roles to include the new competitor page if they had 'all' access or similar
         allowed_p = list(st.session_state.allowed_pages)
-        if "all" in allowed_p:
-            available_pages = list(page_map.values())
-        else:
-            available_pages = [page_map[p] for p in allowed_p if p in page_map]
+        available_pages = [page_map[p] for p in allowed_p if p in page_map]
 
     selected_page = st.sidebar.radio("Select Page", available_pages)
 
-    # ===================== PAGES =====================
+    # --- PAGES ---
     if selected_page == "📊 Dashboard":
         st.markdown(f"### 📊 {city} Market Insights")
         c1, c2, c3 = st.columns(3)
@@ -195,100 +213,125 @@ def main():
         st.markdown("### 📅 Best Arrival Days & Booking Analysis")
         if 'Day' in df.columns and df['Day'].notnull().any():
             day_avg = df.groupby('Day')['Best_Price'].mean().sort_values()
-            st.plotly_chart(px.bar(x=day_avg.index, y=day_avg.values, title="Price by Day"), use_container_width=True)
+            st.plotly_chart(px.bar(x=day_avg.index, y=day_avg.values, title="Average Price by Day of Week", labels={'x':'Day', 'y':'Price'}), use_container_width=True)
         
+        st.markdown("#### 🎯 Optimal Booking Window")
         if 'days_before' in df.columns:
-            st.markdown("#### 🎯 Optimal Booking Window")
             df_valid = df[df['days_before'] >= 0]
             if not df_valid.empty:
-                # Grouping by days before to see the trend
                 window_avg = df_valid.groupby('days_before')['Best_Price'].mean().reset_index()
-                st.plotly_chart(px.line(window_avg, x='days_before', y='Best_Price', title="Price vs Days Booked in Advance"), use_container_width=True)
+                st.plotly_chart(px.line(window_avg, x='days_before', y='Best_Price', title="Best Time to Book (Days in Advance)"), use_container_width=True)
                 st.info("💡 Tip: Lower points on the graph indicate the best time to book!")
-            else:
-                st.info("No sufficient data available to determine the optimal booking window.")
+            else: st.info("No sufficient data for booking window analysis.")
+        else: st.info("Booking date data missing in this file.")
 
     elif selected_page == "🏆 Rankings":
         st.markdown("### 🏆 Top Rankings by Stars")
         df_u = df.sort_values(['Rate', 'Best_Price'], ascending=[False, True]).drop_duplicates(subset=[col_map['Hotel']])
         for s in [5, 4, 3]:
             st.markdown(f"#### ⭐ {s} Star Excellence")
-            for _, row in df_u[df_u['Star'] == s].head(3).iterrows():
-                with st.container(border=True):
-                    st.subheader(f"🏨 {row[col_map['Hotel']]}")
-                    st.write(f"💰 Price: ${row['Best_Price']:.0f} | ⭐ Rate: {row['Rate']}/10")
+            stars_df = df_u[df_u['Star'] == s].head(3)
+            if not stars_df.empty:
+                for _, row in stars_df.iterrows():
+                    with st.container(border=True):
+                        st.subheader(f"🏨 {row[col_map['Hotel']]}")
+                        st.write(f"💰 Price: ${row['Best_Price']:.0f} | ⭐ Rate: {row['Rate']}/10")
+            else: st.write("No data for this category.")
 
     elif selected_page == "🎉 Fun Facts":
-        st.markdown("### 🎉 Fun Facts for Bloggers")
-        lang = st.radio("Select Language | اختر اللغة", ["Arabic", "English"], horizontal=True)
-        facts = generate_fun_facts(df, col_map, city, lang)
-        for fact in facts:
-            st.success(fact)
+        st.markdown("### 🎉 Fun Facts & Viral Insights")
+        st.write("إحصائيات ذكية مخصصة للبلوجرز والمؤثرين في مجال السياحة:")
+        
+        # Historical Split logic (using date if available)
+        if col_map['Arrival']:
+            dates = sorted(df['arrival_dt'].dropna().unique())
+            if len(dates) > 1:
+                selected_date = st.select_slider("Select Data Snapshot", options=dates, format_func=lambda x: x.strftime('%Y-%m-%d'))
+                sub_df = df[df['arrival_dt'] <= selected_date]
+            else: sub_df = df
+        else: sub_df = df
 
-    elif selected_page == "🔍 Tracker":
-        st.markdown("### 🔍 Professional Tracker")
-        st.info("This section provides advanced tracking and monitoring tools for hotel performance and competitor analysis.")
+        facts = generate_fun_facts(sub_df, col_map, city)
+        
+        # Display facts in a grid
+        cols = st.columns(2)
+        for i, fact in enumerate(facts):
+            cols[i % 2].success(fact)
+
+    elif selected_page == "🔍 Professional Tracker":
+        st.markdown("### 🔍 Professional Market Tracker")
+        st.write("تتبع تغيرات السوق والترتيب التنافسي للفنادق:")
+        
+        if col_map['Arrival']:
+            # Price Trend over Arrival Dates
+            trend_df = df.groupby('arrival_dt')['Best_Price'].agg(['mean', 'min', 'max']).reset_index()
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=trend_df['arrival_dt'], y=trend_df['mean'], name='Average Price'))
+            fig.add_trace(go.Scatter(x=trend_df['arrival_dt'], y=trend_df['min'], name='Min Price', line=dict(dash='dash')))
+            fig.update_layout(title="Market Price Trend Over Time")
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Hotel Specific Tracking
+            hotel_list = df[col_map['Hotel']].unique()
+            selected_hotel = st.selectbox("Track Specific Hotel", hotel_list)
+            h_df = df[df[col_map['Hotel']] == selected_hotel].sort_values('arrival_dt')
+            st.line_chart(h_df.set_index('arrival_dt')['Best_Price'])
+        else:
+            st.info("Need arrival dates to enable tracking features.")
 
     elif selected_page == "📍 By Location":
-        st.markdown("### 📍 Hotels by Location/Area")
+        st.markdown("### 📍 Hotels by Location & Features")
         if col_map['Location'] and df[col_map['Location']].notnull().any():
             locations = df[col_map['Location']].dropna().unique()
-            selected_loc = st.selectbox("Select Location", locations)
+            selected_loc = st.selectbox("Select Area", locations)
             loc_df = df[df[col_map['Location']] == selected_loc].copy()
             
-            # Select relevant columns including arrival date
-            cols_to_show = [col_map['Hotel'], 'Best_Price', col_map['Rate']]
-            if col_map['Arrival']:
-                cols_to_show.append(col_map['Arrival'])
+            # Focus on Description and Features
+            cols = [col_map['Hotel'], 'Best_Price', 'Star', 'Rate']
+            if col_map['Desc']: cols.append(col_map['Desc'])
+            if col_map['Dist']: cols.append(col_map['Dist'])
             
-            # Remove duplicates: Keep the one with the best price for each hotel on each arrival date
-            if col_map['Arrival']:
-                loc_df = loc_df.sort_values('Best_Price').drop_duplicates(subset=[col_map['Hotel'], col_map['Arrival']], keep='first')
-            else:
-                loc_df = loc_df.sort_values('Best_Price').drop_duplicates(subset=[col_map['Hotel']], keep='first')
-                
-            st.dataframe(loc_df[cols_to_show])
+            st.dataframe(loc_df[cols].sort_values('Best_Price'))
+        else: st.info("Location data not available.")
+
+    elif selected_page == "⚔️ Competitor Analysis":
+        st.markdown("### ⚔️ Competitor Intelligence")
+        hotel_list = df[col_map['Hotel']].unique()
+        target_hotel = st.selectbox("Select Your Hotel", hotel_list)
+        
+        target_row = df[df[col_map['Hotel']] == target_hotel].iloc[0]
+        target_price = target_row['Best_Price']
+        target_loc = target_row[col_map['Location']] if col_map['Location'] else None
+        
+        st.markdown(f"#### Analysis for: {target_hotel}")
+        
+        # Compare with same location or same stars
+        if target_loc:
+            comps = df[(df[col_map['Location']] == target_loc) & (df[col_map['Hotel']] != target_hotel)]
+            st.write(f"Competitors in **{target_loc}**:")
         else:
-            st.info("Location data not found in this file.")
-
-    elif selected_page == "⚔️ Competitor Price":
-        st.markdown("### ⚔️ Competitor Price Analysis")
+            comps = df[(df['Star'] == target_row['Star']) & (df[col_map['Hotel']] != target_hotel)]
+            st.write(f"Competitors with same **{target_row['Star']} Star** rating:")
+            
+        comps['Price_Diff'] = comps['Best_Price'] - target_price
         
-        # Determine the booking company (first available from Place1, Place2, Place3)
-        def get_booking_company(row):
-            for p_col in ['Place1', 'Place2', 'Place3']:
-                if col_map.get(p_col) and pd.notnull(row[col_map[p_col]]):
-                    return row[col_map[p_col]]
-            return "N/A"
-
-        comp_df = df.copy()
-        comp_df['Booking Company'] = comp_df.apply(get_booking_company, axis=1)
+        c1, c2 = st.columns(2)
+        c1.metric("Your Price", f"${target_price:.0f}")
+        c2.metric("Market Avg", f"${comps['Best_Price'].mean():.0f}", delta=f"{target_price - comps['Best_Price'].mean():.0f}")
         
-        cols_to_show = [col_map['Hotel'], 'Star', 'Best_Price', 'Booking Company']
-        if col_map['Arrival']: cols_to_show.append(col_map['Arrival'])
-        if col_map['Desc']: cols_to_show.append(col_map['Desc'])
-        
-        st.dataframe(comp_df[cols_to_show])
+        st.dataframe(comps[[col_map['Hotel'], 'Best_Price', 'Price_Diff', 'Rate', 'Star']].sort_values('Best_Price'))
 
     elif selected_page == "📊 Price Compare":
-        st.markdown("### 📊 Price Comparison Across Cities")
-        comparison_data = []
-        for city_name, city_info in CITIES_DATA.items():
-            temp_df, _, _ = load_data(city_info['file'])
-            if temp_df is not None:
-                comparison_data.append({
-                    "City": city_name,
-                    "Avg Price": temp_df['Best_Price'].mean(),
-                    "Min Price": temp_df['Best_Price'].min(),
-                    "Max Price": temp_df['Best_Price'].max(),
-                    "Hotel Count": len(temp_df)
-                })
+        st.markdown("### 📊 Cross-City Price Comparison")
+        comp_data = []
+        for c_name, c_info in CITIES_DATA.items():
+            t_df, _, _ = load_data(c_info['file'])
+            if t_df is not None:
+                comp_data.append({"City": c_name, "Avg": t_df['Best_Price'].mean(), "Min": t_df['Best_Price'].min(), "Max": t_df['Best_Price'].max()})
         
-        if comparison_data:
-            compare_df = pd.DataFrame(comparison_data)
-            st.dataframe(compare_df)
-            st.plotly_chart(px.bar(compare_df, x='City', y='Avg Price', title="Average Price by City"), use_container_width=True)
-        else:
-            st.info("No data available for comparison.")
+        if comp_data:
+            c_df = pd.DataFrame(comp_data)
+            st.plotly_chart(px.bar(c_df, x='City', y='Avg', color='City', title="Average Price Comparison"), use_container_width=True)
+            st.table(c_df)
 
 if __name__ == "__main__": main()
