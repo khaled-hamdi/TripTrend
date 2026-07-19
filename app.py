@@ -17,7 +17,7 @@ USERS_DB = {
 }
 
 CITIES_DATA = {
-    "Paris": {"file": "paris_updated.xlsx", "emoji": "🗼", "country": "France"},
+    "Paris": {"file": "Paris_updated.xlsx", "emoji": "🗼", "country": "France"},
     "Dubai": {"file": "dubai_hotels.xlsx", "emoji": "🏙️", "country": "UAE"},
     "Istanbul": {"file": "istanbul_hotels.xlsx", "emoji": "🕌", "country": "Turkey"},
     "Cairo": {"file": "cairo_hotels.xlsx", "emoji": "🏛️", "country": "Egypt"}
