@@ -1,0 +1,26 @@
+{
+    "admin": {
+        "password": "admin123",
+        "role": "admin",
+        "allowed_pages": ["all"],
+        "last_login": "2026-07-22 10:00:00",
+        "expiry_date": "2099-12-31",
+        "status": "active"
+    },
+    "test_blogger": {
+        "password": "test123",
+        "role": "blogger",
+        "allowed_pages": ["📊 Dashboard", "🎉 Fun Facts", "🧭 Traveler Guide"],
+        "last_login": "N/A",
+        "expiry_date": "2026-08-22",
+        "status": "active"
+    },
+    "test_company": {
+        "password": "comp123",
+        "role": "company",
+        "allowed_pages": ["📊 Dashboard", "📈 Trends & Patterns", "🔍 Price Tracker", "⚔️ Competitor Analysis"],
+        "last_login": "N/A",
+        "expiry_date": "2026-09-22",
+        "status": "active"
+    }
+}
