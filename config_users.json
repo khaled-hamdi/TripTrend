@@ -10,7 +10,7 @@
       "test": {
         "password": "123456",
         "role": "blogger",
-       "allowed_pages": ["📊 Dashboard", "🎉 Fun Facts", "🧭 Traveler Guide"],
+       "allowed_pages": ["dashboard", "fun_facts", "guide"],
         "last_login": "2026-07-22 10:00:00",
         "expiry_date": "2099-12-31",
         "status": "active"
@@ -18,7 +18,7 @@
     "test_blogger": {
         "password": "test123",
         "role": "blogger",
-        "allowed_pages": ["📊 Dashboard", "🎉 Fun Facts", "🧭 Traveler Guide","📈 Trends & Patterns", "🔍 Price Tracker", "⚔️ Competitor Analysis"],
+        "allowed_pages": ["dashboard", "fun_facts", "guide","trends", "tracker", "competitor"],
         "last_login": "N/A",
         "expiry_date": "2026-07-21",
         "status": "active"
