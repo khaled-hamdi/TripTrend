@@ -6,15 +6,32 @@ import plotly.express as px
 from datetime import datetime, timedelta
 import os
 import re
+import json
 
 # ======================================================================================
-# --- CONFIGURATION & USERS ---
+# --- USER MANAGEMENT & PERSISTENCE ---
 # ======================================================================================
-USERS_DB = {
-    "admin": {"password": "admin123", "created_at": "2026-01-01", "role": "admin", "pages": ["all"]},
-    "blogger_pro": {"password": "blogger2024", "created_at": "2026-07-11", "role": "blogger", "pages": ["dashboard", "trends", "fun_facts", "rankings"]},
-}
+USERS_FILE = "config_users.json"
 
+def load_users():
+    if os.path.exists(USERS_FILE):
+        with open(USERS_FILE, 'r') as f: return json.load(f)
+    return {
+        "admin": {"password": "admin123", "role": "admin", "allowed_pages": ["all"], "last_login": "N/A", "expiry_date": "2099-12-31", "status": "active"}
+    }
+
+def save_users(users):
+    with open(USERS_FILE, 'w') as f: json.dump(users, f, indent=4)
+
+def update_last_login(username):
+    users = load_users()
+    if username in users:
+        users[username]['last_login'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        save_users(users)
+
+# ======================================================================================
+# --- DATA CONFIG ---
+# ======================================================================================
 CITIES_DATA = {
     "Paris": {"file": "Paris_updated.xlsx", "emoji": "🗼"},
     "Dubai": {"file": "dubai_hotels.xlsx", "emoji": "🏙️"},
@@ -23,20 +40,13 @@ CITIES_DATA = {
 }
 
 # ======================================================================================
-# --- PAGE CONFIG ---
-# ======================================================================================
-st.set_page_config(page_title="Hotel Analytics Pro V25", page_icon="🏨", layout="wide")
-
-# ======================================================================================
-# --- CORE FUNCTIONS ---
+# --- CORE ANALYTICS FUNCTIONS ---
 # ======================================================================================
 def clean_price(val):
     if pd.isnull(val): return np.nan
     cleaned = re.sub(r'[^\d.]', '', str(val))
-    try:
-        return float(cleaned) if cleaned else np.nan
-    except:
-        return np.nan
+    try: return float(cleaned) if cleaned else np.nan
+    except: return np.nan
 
 def find_column(df, possible_names):
     df.columns = df.columns.str.strip()
@@ -60,7 +70,6 @@ def load_data(file_path):
     try:
         df = pd.read_excel(file_path)
         df.columns = df.columns.str.strip()
-        
         col_map = {
             'Hotel': find_column(df, ['Hotel_Name', 'hotel_name', 'hotel']),
             'Rate': find_column(df, ['Rate', 'rating']),
@@ -73,55 +82,38 @@ def load_data(file_path):
             'Place3': find_column(df, ['place3', 'Place3']),
             'ArrivalDay': find_column(df, ['day of arrival']),
             'BookingDate': find_column(df, ['start book', 'date of creat booking']),
-            'BookingDay': find_column(df, ['day of book']),
-            'Dist': find_column(df, ['Distance From places', 'distance']),
             'Desc': find_column(df, ['Desc', 'description']),
             'Location': find_column(df, ['location', 'area'])
         }
-        
         for key in col_map:
             if col_map[key] is None:
                 dummy = f"dummy_{key}"
                 df[dummy] = np.nan
                 col_map[key] = dummy
 
-        # ROBUST PRICE CLEANING
-        for p in ['P1', 'P2', 'P3']:
-            df[col_map[p]] = df[col_map[p]].apply(clean_price)
-        
-        # Smart Best Price (Avoid NaN)
+        for p in ['P1', 'P2', 'P3']: df[col_map[p]] = df[col_map[p]].apply(clean_price)
         df['Best_Price'] = df[[col_map['P1'], col_map['P2'], col_map['P3']]].min(axis=1)
         df['Best_Price'] = df['Best_Price'].fillna(df[col_map['P1']])
-        
         df['Rate'] = pd.to_numeric(df[col_map['Rate']], errors='coerce').fillna(0)
         df['Star'] = pd.to_numeric(df[col_map['Star']].astype(str).str.extract(r'(\d+)')[0], errors='coerce').fillna(0)
-        
-        # SMART DATE INFERENCE
         df['booking_dt'] = try_parse_dates(df[col_map['BookingDate']])
         
-        # Infer Arrival Date from Booking Date + Arrival Day Name
         days_map = {'Monday': 0, 'Tuesday': 1, 'Wednesday': 2, 'Thursday': 3, 'Friday': 4, 'Saturday': 5, 'Sunday': 6}
-        
         def infer_arrival(row):
             if pd.isnull(row['booking_dt']) or pd.isnull(row[col_map['ArrivalDay']]): return np.nan
-            b_dt = row['booking_dt']
-            arr_day_name = str(row[col_map['ArrivalDay']]).strip().capitalize()
-            if arr_day_name not in days_map: return b_dt # Fallback
-            
-            target_weekday = days_map[arr_day_name]
-            current_weekday = b_dt.weekday()
-            
-            days_diff = (target_weekday - current_weekday) % 7
-            if days_diff == 0: days_diff = 7 # Assume next week if same day
-            
+            b_dt, arr_day_name = row['booking_dt'], str(row[col_map['ArrivalDay']]).strip().capitalize()
+            if arr_day_name not in days_map: return b_dt
+            days_diff = (days_map[arr_day_name] - b_dt.weekday()) % 7
+            if days_diff == 0: days_diff = 7
             return b_dt + timedelta(days=days_diff)
-
         df['arrival_dt'] = df.apply(infer_arrival, axis=1)
         df['days_before'] = (df['arrival_dt'] - df['booking_dt']).dt.days
-        
         return df, col_map, None
     except Exception as e: return None, None, str(e)
 
+# ======================================================================================
+# --- UI HELPERS ---
+# ======================================================================================
 def get_booking_company(row, col_map):
     for p_col in ['Place1', 'Place2', 'Place3']:
         val = row[col_map[p_col]]
@@ -133,77 +125,124 @@ def generate_fun_facts(df, col_map, city, lang="Arabic"):
     if df.empty: return ["لا توجد بيانات"]
     h_col = col_map['Hotel']
     try:
-        # 20+ Dynamic Fact Engine
         cheapest = df.loc[df['Best_Price'].idxmin()]
         facts.append(f"💰 أرخص فندق: **{cheapest[h_col]}** بـ ${cheapest['Best_Price']:.0f}." if lang=="Arabic" else f"💰 Cheapest: **{cheapest[h_col]}** at ${cheapest['Best_Price']:.0f}.")
-        
         expensive = df.loc[df['Best_Price'].idxmax()]
         facts.append(f"💎 أغلى فندق: **{expensive[h_col]}** بـ ${expensive['Best_Price']:.0f}." if lang=="Arabic" else f"💎 Most expensive: **{expensive[h_col]}** at ${expensive['Best_Price']:.0f}.")
-        
         top_rated = df.loc[df['Rate'].idxmax()]
         facts.append(f"🌟 الأعلى تقييماً: **{top_rated[h_col]}** ({top_rated['Rate']}/10)." if lang=="Arabic" else f"🌟 Top rated: **{top_rated[h_col]}** ({top_rated['Rate']}/10).")
-        
         avg_p = df['Best_Price'].mean()
         facts.append(f"📉 متوسط السعر في {city}: ${avg_p:.0f}." if lang=="Arabic" else f"📉 Market avg in {city}: ${avg_p:.0f}.")
-        
         df['Value'] = df['Rate'] / df['Best_Price'].replace(0, np.nan)
         best_v = df.loc[df['Value'].idxmax()]
         facts.append(f"🎯 صفقة اليوم: **{best_v[h_col]}** (أفضل جودة مقابل سعر)." if lang=="Arabic" else f"🎯 Deal of the day: **{best_v[h_col]}** (Quality/Price).")
-        
-        facts.append(f"📊 تم تحليل {len(df)} عرض فندقي مختلف." if lang=="Arabic" else f"📊 {len(df)} total offers analyzed.")
-        facts.append(f"📍 {df[col_map['Location']].nunique()} منطقة مغطاة بالكامل." if lang=="Arabic" else f"📍 {df[col_map['Location']].nunique()} areas fully covered.")
-        
-        if not df['days_before'].dropna().empty:
-            best_w = df.groupby('days_before')['Best_Price'].mean().idxmin()
-            facts.append(f"📅 نصيحة: الحجز قبل {int(best_w)} يوم هو الأوفر لك." if lang=="Arabic" else f"📅 Tip: Booking {int(best_w)} days ahead is cheapest.")
-
-        facts.append(f"🌐 منصة **{df[col_map['Place1']].value_counts().idxmax()}** الأكثر نشاطاً." if lang=="Arabic" else f"🌐 **{df[col_map['Place1']].value_counts().idxmax()}** is the top platform.")
-        facts.append(f"📉 {len(df[df['Best_Price'] < avg_p])} فندق أسعارهم تحت المتوسط." if lang=="Arabic" else f"📉 {len(df[df['Best_Price'] < avg_p])} hotels below market avg.")
-        facts.append(f"🏆 {len(df[df['Rate'] >= 9])} فندق حصلوا على تقييم 'ممتاز جداً'." if lang=="Arabic" else f"🏆 {len(df[df['Rate'] >= 9])} hotels have 'Excellent' rating.")
+        facts.append(f"📊 تم تحليل {len(df)} عرض فندقي." if lang=="Arabic" else f"📊 {len(df)} offers analyzed.")
         facts.append(f"✨ تم التحديث: {datetime.now().strftime('%Y-%m-%d')}.")
-        
-    except Exception as e: facts.append(f"Note: {str(e)}")
+    except: facts.append("Analysis in progress...")
     return facts
 
 # ======================================================================================
 # --- MAIN APP ---
 # ======================================================================================
+st.set_page_config(page_title="Hotel Analytics Pro V26", page_icon="🏨", layout="wide")
+
 def main():
+    users = load_users()
     if 'logged_in' not in st.session_state: st.session_state.logged_in = False
+    
     if not st.session_state.logged_in:
-        st.title("🏨 Hotel Analytics Pro V25")
-        u, p = st.text_input("User"), st.text_input("Pass", type="password")
-        if st.button("Login"):
-            if u in USERS_DB and USERS_DB[u]['password'] == p:
-                st.session_state.logged_in, st.session_state.username = True, u
-                st.session_state.role, st.session_state.allowed_pages = USERS_DB[u]['role'], USERS_DB[u]['pages']
-                st.rerun()
+        st.title("🏨 Hotel Analytics Pro V26")
+        with st.container(border=True):
+            u = st.text_input("Username")
+            p = st.text_input("Password", type="password")
+            if st.button("Login"):
+                if u in users and users[u]['password'] == p:
+                    expiry = datetime.strptime(users[u]['expiry_date'], "%Y-%m-%d")
+                    if datetime.now() > expiry:
+                        st.error("❌ Subscription Expired. Please contact admin.")
+                    elif users[u]['status'] == 'inactive':
+                        st.error("❌ Account Disabled.")
+                    else:
+                        st.session_state.logged_in, st.session_state.username = True, u
+                        st.session_state.role = users[u]['role']
+                        st.session_state.allowed_pages = users[u]['allowed_pages']
+                        update_last_login(u)
+                        st.rerun()
+                else: st.error("❌ Invalid Credentials")
         return
 
+    # --- SIDEBAR ---
     st.sidebar.title(f"🚀 {st.session_state.username}")
+    st.sidebar.info(f"Role: {st.session_state.role.capitalize()}")
+    
     city = st.sidebar.selectbox("Select City", list(CITIES_DATA.keys()))
     df, col_map, err = load_data(CITIES_DATA[city]['file'])
     
     if err: st.warning(f"⚠️ {err}"); return
 
-    # --- SHARED DATA FILTER (Latest vs All) ---
+    # --- SHARED DATA FILTER ---
     data_mode = st.sidebar.radio("Analysis Mode", ["All Data (Cumulative)", "Latest Update Only"])
     if data_mode == "Latest Update Only":
         latest_b = df[col_map['BookingDate']].dropna().max()
         df = df[df[col_map['BookingDate']] == latest_b]
 
+    # --- NAVIGATION ---
     page_map = {
         "dashboard": "📊 Dashboard", "trends": "📈 Trends & Patterns", "rankings": "🏆 Rankings",
         "tracker": "🔍 Price Tracker", "fun_facts": "🎉 Fun Facts",
         "location": "📍 By Location", "competitor": "⚔️ Competitor Analysis",
-        "guide": "🧭 Traveler Guide", "custom_compare": "🎯 Custom Hotel Compare"
+        "guide": "🧭 Traveler Guide", "custom_compare": "🎯 Custom Hotel Compare",
+        "admin": "⚙️ Admin Control Panel"
     }
     
-    available_pages = [page_map[p] for p in (list(page_map.keys()) if "all" in st.session_state.allowed_pages else st.session_state.allowed_pages) if p in page_map]
-    selected_page = st.sidebar.radio("Select Page", available_pages)
+    # Permission Logic
+    if "all" in st.session_state.allowed_pages:
+        available_pages = list(page_map.values())
+    else:
+        available_pages = [page_map[p] for p in st.session_state.allowed_pages if p in page_map]
+        if st.session_state.role == "admin": available_pages.append(page_map["admin"])
+
+    selected_page = st.sidebar.radio("Navigation", available_pages)
 
     # --- PAGES ---
-    if selected_page == "📊 Dashboard":
+    if selected_page == "⚙️ Admin Control Panel":
+        st.title("⚙️ Admin Control Panel")
+        tab1, tab2, tab3 = st.tabs(["👤 User Management", "📈 System Analytics", "📁 Data Status"])
+        
+        with tab1:
+            st.subheader("Current Users")
+            user_df = pd.DataFrame.from_dict(users, orient='index').reset_index()
+            user_df.rename(columns={'index': 'Username'}, inplace=True)
+            st.dataframe(user_df[['Username', 'role', 'last_login', 'expiry_date', 'status']], hide_index=True)
+            
+            with st.expander("➕ Add New User"):
+                new_u = st.text_input("New Username")
+                new_p = st.text_input("New Password")
+                new_role = st.selectbox("Role", ["blogger", "company", "admin"])
+                new_expiry = st.date_input("Expiry Date", datetime.now() + timedelta(days=30))
+                if st.button("Create User"):
+                    users[new_u] = {
+                        "password": new_p, "role": new_role, "status": "active",
+                        "expiry_date": new_expiry.strftime("%Y-%m-%d"), "last_login": "N/A",
+                        "allowed_pages": ["dashboard", "fun_facts", "guide"] if new_role == "blogger" else ["all"]
+                    }
+                    save_users(users)
+                    st.success(f"User {new_u} created!")
+                    st.rerun()
+
+        with tab2:
+            st.subheader("Usage Statistics")
+            c1, c2 = st.columns(2)
+            c1.metric("Total Users", len(users))
+            c2.metric("Active Subscriptions", len([u for u in users.values() if u['status'] == 'active']))
+            
+        with tab3:
+            st.subheader("Data Files Quality")
+            for c, info in CITIES_DATA.items():
+                status = "✅ Online" if os.path.exists(info['file']) else "❌ Missing"
+                st.write(f"**{c}:** {status}")
+
+    elif selected_page == "📊 Dashboard":
         st.markdown(f"### 📊 {city} Market Insights ({data_mode})")
         c1, c2, c3 = st.columns(3)
         c1.metric("Avg Price", f"${df['Best_Price'].mean():.0f}")
@@ -213,15 +252,12 @@ def main():
 
     elif selected_page == "📈 Trends & Patterns":
         st.markdown("### 📈 Trends: Market Patterns")
-        st.write("Understand general market behaviors (e.g., which arrival day is cheapest).")
         st.plotly_chart(px.bar(df.groupby(col_map['ArrivalDay'])['Best_Price'].mean().sort_values(), title="Price Pattern by Arrival Day"), use_container_width=True)
-        
         st.markdown("#### 🎯 Optimal Booking Window")
         valid_bw = df.dropna(subset=['days_before'])
         if not valid_bw.empty:
-            st.plotly_chart(px.line(valid_bw.groupby('days_before')['Best_Price'].mean().reset_index(), x='days_before', y='Best_Price', title="Best Time to Book (Days in Advance)"), use_container_width=True)
-        else:
-            st.info("💡 Booking Window calculation active based on 'start book' and 'day of arrival'.")
+            st.plotly_chart(px.line(valid_bw.groupby('days_before')['Best_Price'].mean().reset_index(), x='days_before', y='Best_Price', title="Best Time to Book"), use_container_width=True)
+        else: st.info("💡 Booking Window calculation active based on 'start book' and 'day of arrival'.")
 
     elif selected_page == "🏆 Rankings":
         st.markdown("### 🏆 Top Hotel Rankings")
@@ -245,16 +281,13 @@ def main():
 
     elif selected_page == "🔍 Price Tracker":
         st.markdown("### 🔍 Price Tracker: Price Evolution")
-        st.write("Monitor how prices change over time for specific hotels or the whole market.")
         if not df['booking_dt'].dropna().empty:
-            st.plotly_chart(px.line(df.groupby('booking_dt')['Best_Price'].agg(['mean', 'min']).reset_index(), x='booking_dt', y=['mean', 'min'], title="Market Price Evolution by Booking Date"), use_container_width=True)
-        
+            st.plotly_chart(px.line(df.groupby('booking_dt')['Best_Price'].agg(['mean', 'min']).reset_index(), x='booking_dt', y=['mean', 'min'], title="Market Price Evolution"), use_container_width=True)
         hotel_opts = df.apply(lambda r: f"{r[col_map['Hotel']]} | ⭐{r['Star']} | 📍{r[col_map['Location']]}", axis=1).unique()
         sel = st.selectbox("Track Specific Hotel", hotel_opts)
         h_name = sel.split(" | ")[0]
         h_df = df[df[col_map['Hotel']] == h_name].sort_values('booking_dt')
-        if not h_df.empty:
-            st.line_chart(h_df.set_index(col_map['BookingDate'])['Best_Price'])
+        if not h_df.empty: st.line_chart(h_df.set_index(col_map['BookingDate'])['Best_Price'])
 
     elif selected_page == "📍 By Location":
         st.markdown("### 📍 Hotels by Location & History")
@@ -275,13 +308,10 @@ def main():
             with st.container(border=True):
                 st.subheader(f"🏨 {hotel} | ${target['Best_Price']:.0f}")
                 st.write(f"⭐ {target['Star']} Stars | 📍 {target[col_map['Location']]}")
-            
             comps = df[df[col_map['Hotel']] != hotel].copy()
             if pd.notnull(target[col_map['Location']]) and str(target[col_map['Location']]) != "":
                 comps = comps[comps[col_map['Location']] == target[col_map['Location']]]
-            else:
-                comps = comps[comps['Star'] == target['Star']]
-            
+            else: comps = comps[comps['Star'] == target['Star']]
             comps['Booking Company'] = comps.apply(lambda r: get_booking_company(r, col_map), axis=1)
             st.dataframe(comps[[col_map['Hotel'], 'Best_Price', 'Booking Company', 'Rate', 'Star', col_map['ArrivalDay']]].sort_values('Best_Price'), hide_index=True)
 
@@ -329,5 +359,9 @@ def main():
                             "Location": last_row[col_map['Location']], "Description": last_row[col_map['Desc']]
                         })
                 st.dataframe(pd.DataFrame(results), hide_index=True)
+
+    if st.sidebar.button("Logout"):
+        st.session_state.logged_in = False
+        st.rerun()
 
 if __name__ == "__main__": main()
