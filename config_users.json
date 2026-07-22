@@ -7,6 +7,14 @@
         "expiry_date": "2099-12-31",
         "status": "active"
     },
+      "test": {
+        "password": "123456",
+        "role": "admin",
+        "allowed_pages": ["all"],
+        "last_login": "2026-07-22 10:00:00",
+        "expiry_date": "2099-12-31",
+        "status": "active"
+    },
     "test_blogger": {
         "password": "test123",
         "role": "blogger",
