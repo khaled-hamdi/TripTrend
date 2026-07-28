@@ -10,7 +10,7 @@
       "test": {
         "password": "123456",
         "role": "blogger",
-       "allowed_pages":["dashboard", "fun_facts", "guide","trends", "tracker", "competitor"],
+       "allowed_pages":[["dashboard", "fun_facts", "guide","trends", "tracker", "competitor","rankings","location","custom_compare"],
         "last_login": "2026-07-22 10:00:00",
         "expiry_date": "2099-12-31",
         "status": "active"
