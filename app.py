@@ -144,14 +144,14 @@ def generate_fun_facts(df, col_map, city, lang="Arabic"):
 # ======================================================================================
 # --- MAIN APP ---
 # ======================================================================================
-st.set_page_config(page_title="Hotel Analytics Pro V26", page_icon="🏨", layout="wide")
+st.set_page_config(page_title="Hotel Analytics", page_icon="🏨", layout="wide")
 
 def main():
     users = load_users()
     if 'logged_in' not in st.session_state: st.session_state.logged_in = False
     
     if not st.session_state.logged_in:
-        st.title("🏨 Hotel Analytics Pro V26")
+        st.title("🏨 Hotel Analytics ")
         with st.container(border=True):
             u = st.text_input("Username")
             p = st.text_input("Password", type="password")
