@@ -36,7 +36,7 @@ CITIES_DATA = {
     "Paris": {"file": "Paris_updated.xlsx", "emoji": "🗼"},
     # "Dubai": {"file": "dubai_hotels.xlsx", "emoji": "🏙️"},
     # "Istanbul": {"file": "istanbul_hotels.xlsx", "emoji": "🕌"},
-    "NewYork": {"file": "Paris_updated.xlsx", "emoji": "🏛️"}
+    "NewYork": {"file": "NewYork.xlsx", "emoji": "🏛️"}
 }
 
 # ======================================================================================
