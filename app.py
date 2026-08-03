@@ -34,7 +34,7 @@ def update_last_login(username):
 # ======================================================================================
 CITIES_DATA = {
     "Paris": {"file": "Paris_updated.xlsx", "emoji": "🗼"},
-    "Dubai": {"file": "dubai.xlsx", "emoji": "🏙️"},
+    "Dubai": {"file": "Dubai.xlsx", "emoji": "🏙️"},
     # "Istanbul": {"file": "istanbul_hotels.xlsx", "emoji": "🕌"},
     "NewYork": {"file": "NewYork.xlsx", "emoji": "🏛️"}
 }
