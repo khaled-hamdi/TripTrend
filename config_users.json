@@ -29,15 +29,15 @@
     },
     "_sponsors": {
         "Paris": [
-            {"name": "Paris Elite Tours", "desc": "Best private guides in Paris", "link": "https://example.com/paris"},
-            {"name": "Seine River Cruises", "desc": "Exclusive dinner cruises", "link": "https://example.com/seine"}
+            {"name": "Paris Elite Tours", "desc": "Best private guides in Paris", "link": ""},
+            {"name": "Seine River Cruises", "desc": "Exclusive dinner cruises", "link": ""}
         ],
         "Dubai": [
-            {"name": "Desert Safari Pro", "desc": "Premium desert adventures", "link": "https://example.com/dubai"},
-            {"name": "Burj View Dining", "desc": "Best views in the city", "link": "https://example.com/burj"}
+            {"name": "Desert Safari Pro", "desc": "Premium desert adventures", "link": ""},
+            {"name": "Burj View Dining", "desc": "Best views in the city", "link": ""}
         ],
         "General": [
-            {"name": "Manus Travel Insurance", "desc": "Safe travels everywhere", "link": "https://help.manus.im"}
+            {"name": "Manus Travel Insurance", "desc": "Safe travels everywhere", "link": ""}
         ]
     }
 }
