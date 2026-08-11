@@ -1,4 +1,8 @@
 {
+    "_settings": {
+        "public_access": false,
+        "default_landing_page": "🌍 Country Comparison"
+    },
     "admin": {
         "password": "admin123",
         "role": "admin",
@@ -7,28 +11,33 @@
         "expiry_date": "2099-12-31",
         "status": "active"
     },
-      "test": {
-        "password": "123456",
-        "role": "blogger",
-       "allowed_pages":["dashboard", "fun_facts", "guide","trends", "tracker", "competitor","rankings","location","custom_compare"],
-        "last_login": "2026-07-22 10:00:00",
-        "expiry_date": "2099-12-31",
-        "status": "active"
-    },
     "test_blogger": {
         "password": "test123",
         "role": "blogger",
-        "allowed_pages": ["dashboard", "fun_facts", "guide","trends", "tracker", "competitor","rankings","location","custom_compare"],
+        "allowed_pages": ["dashboard", "fun_facts", "guide", "comparison"],
         "last_login": "N/A",
-        "expiry_date": "2026-07-21",
+        "expiry_date": "2026-08-22",
         "status": "active"
     },
     "test_company": {
         "password": "comp123",
         "role": "company",
-        "allowed_pages": ["dashboard", "fun_facts", "guide","trends", "tracker", "competitor","rankings"],
+        "allowed_pages": ["dashboard", "trends", "tracker", "competitor"],
         "last_login": "N/A",
         "expiry_date": "2026-09-22",
         "status": "active"
+    },
+    "_sponsors": {
+        "Paris": [
+            {"name": "Paris Elite Tours", "desc": "Best private guides in Paris", "link": "https://example.com/paris"},
+            {"name": "Seine River Cruises", "desc": "Exclusive dinner cruises", "link": "https://example.com/seine"}
+        ],
+        "Dubai": [
+            {"name": "Desert Safari Pro", "desc": "Premium desert adventures", "link": "https://example.com/dubai"},
+            {"name": "Burj View Dining", "desc": "Best views in the city", "link": "https://example.com/burj"}
+        ],
+        "General": [
+            {"name": "Manus Travel Insurance", "desc": "Safe travels everywhere", "link": "https://help.manus.im"}
+        ]
     }
 }
