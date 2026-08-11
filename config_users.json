@@ -14,7 +14,7 @@
     "test_blogger": {
         "password": "test123",
         "role": "blogger",
-        "allowed_pages": ["dashboard", "fun_facts", "guide", "comparison"],
+        "allowed_pages": ["dashboard", "fun_facts", "guide", "comparison","trends","rankings","tracker","custom_compare"],
         "last_login": "N/A",
         "expiry_date": "2026-08-22",
         "status": "active"
@@ -22,7 +22,7 @@
     "test_company": {
         "password": "comp123",
         "role": "company",
-        "allowed_pages": ["dashboard", "trends", "tracker", "competitor"],
+        "allowed_pages": ["dashboard", "fun_facts", "guide", "comparison","trends","rankings","tracker","custom_compare"],
         "last_login": "N/A",
         "expiry_date": "2026-09-22",
         "status": "active"
