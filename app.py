@@ -420,7 +420,7 @@ def main():
                 height=calc_height
             )
 
-        else:
+            else:
             # --- CITY PAGES ---
             df, col_map, err = load_data(CITIES_DATA[city]['file'])
             if err: 
