@@ -246,11 +246,11 @@ def main():
 
     # --- NAVIGATION ---
     page_map = {
-        "comparison": "🌍 Country Comparison", "dashboard": "📊 Dashboard",
+         "guide": "🧭 Traveler Guide" ,"comparison": "🌍 Country Comparison", "dashboard": "📊 Dashboard",
         "trends": "📈 Trends & Patterns", "rankings": "🏆 Rankings",
         "tracker": "🔍 Price Tracker", "fun_facts": "🎉 Fun Facts",
         "location": "📍 By Location", "competitor": "⚔️ Competitor Analysis",
-        "guide": "🧭 Traveler Guide", "custom_compare": "🎯 Custom Hotel Compare",
+       , "custom_compare": "🎯 Custom Hotel Compare",
         "partners": "🤝 Partners Marketplace", "admin": "⚙️ Admin Control Panel"
     }
     
