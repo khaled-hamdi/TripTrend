@@ -33,37 +33,37 @@ CITIES = {
         "description": "The City of Light - Luxury Hotels & Budget Options"
     },
     "Dubai": {
-        "file": "paris 10-7.xlsx",
+        "file": "Dubai.xlsx",
         "emoji": "🏙️",
         "country": "UAE",
         "description": "Luxury Desert Destination - Premium Hotels"
     },
     "Istanbul": {
-        "file": "paris 10-7.xlsx",
+        "file": "Istanbul.xlsx",
         "emoji": "🕌",
         "country": "Turkey",
         "description": "Bridge Between Continents - Historic & Modern Hotels"
     },
     "Cairo": {
-        "file": "paris 10-7.xlsx",
+        "file": "Cairo.xlsx",
         "emoji": "🏛️",
         "country": "Egypt",
         "description": "Ancient Wonders - Cultural Hub Hotels"
     },
     "New York": {
-        "file": "paris 10-7.xlsx",
+        "file": "New York.xlsx",
         "emoji": "🗽",
         "country": "USA",
         "description": "The City That Never Sleeps - Diverse Hotel Options"
     },
     "Tokyo": {
-        "file": "paris 10-7.xlsx",
+        "file": "Tokyo.xlsx",
         "emoji": "🗾",
         "country": "Japan",
         "description": "Modern Metropolis - High-Tech Hotels"
     },
     "London": {
-        "file": "paris 10-7.xlsx",
+        "file": "London.xlsx",
         "emoji": "🎡",
         "country": "UK",
         "description": "Historic Capital - Elegant Hotels"
