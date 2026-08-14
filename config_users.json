@@ -11,8 +11,8 @@
         "expiry_date": "2099-12-31",
         "status": "active"
     },
-    "test_blogger": {
-        "password": "test123",
+    "test": {
+        "password": "123456",
         "role": "blogger",
         "allowed_pages": ["dashboard", "fun_facts", "guide", "comparison","trends","rankings","tracker","custom_compare","partners","location"],
         "last_login": "N/A",
