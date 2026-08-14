@@ -398,33 +398,34 @@ def main():
 
             # --- الكود الجديد هنا ---
 
+          # --- الكود بعد التصحيح ---
             df_summary = pd.DataFrame(summary)
 
             if not df_summary.empty:
-
                 totals = pd.DataFrame([{
-
                     "Page": "🏁 TOTAL",
-
                     "Today": df_summary["Today"].sum(),
-
                     "Yesterday": df_summary["Yesterday"].sum(),
-
                     "Total": df_summary["Total"].sum()
-
                 }])
-
                 df_summary = pd.concat([df_summary, totals], ignore_index=True)
 
-            
+            # حساب الارتفاع المناسب للجدول تلقائياً
+            calc_height = (len(df_summary) + 1) * 35 + 3
 
-            st.dataframe(df_summary, hide_index=True, use_container_width=True) 
+            st.dataframe(
+                df_summary, 
+                hide_index=True, 
+                use_container_width=True, 
+                height=calc_height
+            )
 
-
-       else:
-        # --- CITY PAGES ---
-        df, col_map, err = load_data(CITIES_DATA[city]['file'])
-        if err: st.warning(f"⚠️ {err}"); return
+        else:
+            # --- CITY PAGES ---
+            df, col_map, err = load_data(CITIES_DATA[city]['file'])
+            if err: 
+                st.warning(f"⚠️ {err}")
+                return
         
         if data_mode == "Latest Snapshot Only":
             latest_b = df[col_map['BookingDate']].dropna().max()
