@@ -1,7 +1,7 @@
 {
     "_settings": {
         "public_access": false,
-        "default_landing_page": "🌍 Country Comparison"
+        "default_landing_page": "🧭 Traveler Guide"
     },
     "admin": {
         "password": "admin123",
