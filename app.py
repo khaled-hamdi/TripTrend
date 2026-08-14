@@ -17,7 +17,7 @@ def load_config():
     if os.path.exists(USERS_FILE):
         with open(USERS_FILE, 'r') as f:
             config = json.load(f)
-            if "_settings" not in config: config["_settings"] = {"public_access": False, "default_landing_page": "🌍 Country Comparison"}
+            if "_settings" not in config: config["_settings"] = {"public_access": False, "default_landing_page": "🧭 Traveler Guide"}
             if "_sponsors" not in config: config["_sponsors"] = {"General": []}
             if "_stats" not in config: config["_stats"] = {"daily": {}, "total": {}}
             return config
