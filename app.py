@@ -219,7 +219,7 @@ def main():
         st.session_state.is_public = True
     
     if not st.session_state.logged_in:
-        st.title("🏨 Hotel Analytics Pro V33")
+        st.title("🏨 Hotel Analytics")
         with st.container(border=True):
             u = st.text_input("Username")
             p = st.text_input("Password", type="password")
