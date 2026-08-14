@@ -8,7 +8,7 @@
 # يمكنك إضافة أي عدد من المستخدمين بأسماء متغيرة
 
 USERS = {
-    "test_blogger": "123456",           # Demo user
+    "test": "123456",           # Demo user
     "admin": "admin123",              # Admin user
     "company_a": "company@123",       # Company A
     "company_b": "company@456",       # Company B
