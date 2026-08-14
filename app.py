@@ -372,35 +372,20 @@ def main():
             if st.button("Save Settings"):
                 config["_settings"] = settings
                 save_config(config); st.success("Updated!"); st.rerun()
-        with tab3:
-
+               with tab3:
             st.subheader("Page View Statistics")
-
             stats = config.get("_stats", {"daily": {}, "total": {}})
-
             summary = []
-
             for p in page_map.values():
-
                 summary.append({
-
                     "Page": p,
-
                     "Today": stats["daily"].get(datetime.now().strftime("%Y-%m-%d"), {}).get(p, 0),
-
                     "Yesterday": stats["daily"].get((datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d"), {}).get(p, 0),
-
                     "Total": stats["total"].get(p, 0)
-
                 })
-
             
-
             # --- الكود الجديد هنا ---
-
-          # --- الكود بعد التصحيح ---
             df_summary = pd.DataFrame(summary)
-
             if not df_summary.empty:
                 totals = pd.DataFrame([{
                     "Page": "🏁 TOTAL",
@@ -409,16 +394,8 @@ def main():
                     "Total": df_summary["Total"].sum()
                 }])
                 df_summary = pd.concat([df_summary, totals], ignore_index=True)
-
-            # حساب الارتفاع المناسب للجدول تلقائياً
-            calc_height = (len(df_summary) + 1) * 35 + 3
-
-            st.dataframe(
-                df_summary, 
-                hide_index=True, 
-                use_container_width=True, 
-                height=calc_height
-            )
+            
+            st.dataframe(df_summary, hide_index=True, use_container_width=True)
 
             else:
             # --- CITY PAGES ---
