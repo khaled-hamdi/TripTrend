@@ -403,7 +403,7 @@ st.dataframe(
     use_container_width=True, 
     height=calc_height  # <--- إضافة الارتفاع المحسوب هنا
 )
-    else:
+        else:
         # --- CITY PAGES ---
         df, col_map, err = load_data(CITIES_DATA[city]['file'])
         if err: st.warning(f"⚠️ {err}"); return
