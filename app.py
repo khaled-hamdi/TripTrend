@@ -246,12 +246,12 @@ def main():
 
     # --- NAVIGATION ---
     page_map = {
-         "guide": "🧭 Traveler Guide" ,"comparison": "🌍 Country Comparison", "dashboard": "📊 Dashboard",
+        "admin": "⚙️ Admin Control Panel" , "guide": "🧭 Traveler Guide" ,"comparison": "🌍 Country Comparison", "dashboard": "📊 Dashboard",
         "trends": "📈 Trends & Patterns", "rankings": "🏆 Rankings",
         "tracker": "🔍 Price Tracker", "fun_facts": "🎉 Fun Facts",
         "location": "📍 By Location", "competitor": "⚔️ Competitor Analysis",
          "custom_compare": "🎯 Custom Hotel Compare",
-        "partners": "🤝 Partners Marketplace", "admin": "⚙️ Admin Control Panel"
+        "partners": "🤝 Partners Marketplace", 
     }
     
     raw_allowed = st.session_state.allowed_pages
