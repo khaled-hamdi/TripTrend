@@ -383,21 +383,26 @@ def main():
                     "Yesterday": stats["daily"].get((datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d"), {}).get(p, 0),
                     "Total": stats["total"].get(p, 0)
                 })
-            
             # --- الكود الجديد هنا ---
-            df_summary = pd.DataFrame(summary)
-            if not df_summary.empty:
-                totals = pd.DataFrame([{
-                    "Page": "🏁 TOTAL",
-                    "Today": df_summary["Today"].sum(),
-                    "Yesterday": df_summary["Yesterday"].sum(),
-                    "Total": df_summary["Total"].sum()
-                }])
-                df_summary = pd.concat([df_summary, totals], ignore_index=True)
-            
-            st.dataframe(df_summary, hide_index=True, use_container_width=True)
-            height=900  # <--- اختر الارتفاع المناسب بالبكسل (مثلاً 500 أو 600)
+df_summary = pd.DataFrame(summary)
+if not df_summary.empty:
+    totals = pd.DataFrame([{
+        "Page": "🏁 TOTAL",
+        "Today": df_summary["Today"].sum(),
+        "Yesterday": df_summary["Yesterday"].sum(),
+        "Total": df_summary["Total"].sum()
+    }])
+    df_summary = pd.concat([df_summary, totals], ignore_index=True)
 
+# حساب الارتفاع المطلوب تلقائياً (35 بكسل لكل صف + 38 بكسل للـ Header)
+calc_height = (len(df_summary) + 1) * 35 + 3
+
+st.dataframe(
+    df_summary, 
+    hide_index=True, 
+    use_container_width=True, 
+    height=calc_height  # <--- إضافة الارتفاع المحسوب هنا
+)
     else:
         # --- CITY PAGES ---
         df, col_map, err = load_data(CITIES_DATA[city]['file'])
