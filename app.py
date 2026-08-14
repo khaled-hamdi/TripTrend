@@ -396,7 +396,7 @@ def main():
                 df_summary = pd.concat([df_summary, totals], ignore_index=True)
             
             st.dataframe(df_summary, hide_index=True, use_container_width=True)
-   else:
+     else:
         # --- CITY PAGES ---
         df, col_map, err = load_data(CITIES_DATA[city]['file'])
         if err: st.warning(f"⚠️ {err}"); return
