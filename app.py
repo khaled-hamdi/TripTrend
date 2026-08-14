@@ -209,7 +209,7 @@ def main():
         st.session_state.username = "Public_Visitor"
         st.session_state.role = "blogger"
         # Never allow 'all' or 'admin' page for public visitors
-        st.session_state.allowed_pages = ["comparison", "dashboard", "fun_facts", "guide"]
+        st.session_state.allowed_pages = ["dashboard", "fun_facts", "guide", "comparison","trends","rankings","tracker","custom_compare","partners","location"]
         st.session_state.is_public = True
         # Force Landing Page on first entry
         if 'first_entry' not in st.session_state:
@@ -217,7 +217,7 @@ def main():
             st.session_state.current_page = settings.get("default_landing_page", "🌍 Country Comparison")
 
     if not st.session_state.logged_in:
-        st.title("🏨 Hotel Analytics Pro V34")
+        st.title("🏨 Hotel Analytics")
         with st.container(border=True):
             u = st.text_input("Username")
             p = st.text_input("Password", type="password")
