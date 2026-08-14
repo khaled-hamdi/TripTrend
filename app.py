@@ -396,7 +396,7 @@ def main():
                 df_summary = pd.concat([df_summary, totals], ignore_index=True)
             
             st.dataframe(df_summary, hide_index=True, use_container_width=True)
-            height=500  # <--- اختر الارتفاع المناسب بالبكسل (مثلاً 500 أو 600)
+            height=600  # <--- اختر الارتفاع المناسب بالبكسل (مثلاً 500 أو 600)
 
     else:
         # --- CITY PAGES ---
