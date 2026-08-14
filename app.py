@@ -372,7 +372,7 @@ def main():
             if st.button("Save Settings"):
                 config["_settings"] = settings
                 save_config(config); st.success("Updated!"); st.rerun()
-        with tab3:
+               with tab3:
             st.subheader("Page View Statistics")
             stats = config.get("_stats", {"daily": {}, "total": {}})
             summary = []
@@ -383,7 +383,20 @@ def main():
                     "Yesterday": stats["daily"].get((datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d"), {}).get(p, 0),
                     "Total": stats["total"].get(p, 0)
                 })
-            st.dataframe(pd.DataFrame(summary), hide_index=True, use_container_width=True)
+            
+            # --- الكود الجديد هنا ---
+            df_summary = pd.DataFrame(summary)
+            if not df_summary.empty:
+                totals = pd.DataFrame([{
+                    "Page": "🏁 TOTAL",
+                    "Today": df_summary["Today"].sum(),
+                    "Yesterday": df_summary["Yesterday"].sum(),
+                    "Total": df_summary["Total"].sum()
+                }])
+                df_summary = pd.concat([df_summary, totals], ignore_index=True)
+            
+            st.dataframe(df_summary, hide_index=True, use_container_width=True)
+
 
     else:
         # --- CITY PAGES ---
