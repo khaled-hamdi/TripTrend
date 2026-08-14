@@ -397,15 +397,14 @@ def main():
             
             st.dataframe(df_summary, hide_index=True, use_container_width=True)
  else:
-            # --- CITY PAGES ---
-            df, col_map, err = load_data(CITIES_DATA[city]['file'])
-            if err: 
-                st.warning(f"⚠️ {err}")
-                return
+        # --- CITY PAGES ---
+        df, col_map, err = load_data(CITIES_DATA[city]['file'])
+        if err: st.warning(f"⚠️ {err}"); return
         
         if data_mode == "Latest Snapshot Only":
             latest_b = df[col_map['BookingDate']].dropna().max()
             df = df[df[col_map['BookingDate']] == latest_b]
+
 
         # Contextual Ad Banner
         sponsors = config.get("_sponsors", {}).get(city, [])
