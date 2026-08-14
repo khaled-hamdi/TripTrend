@@ -17,11 +17,11 @@ def load_config():
     if os.path.exists(USERS_FILE):
         with open(USERS_FILE, 'r') as f:
             config = json.load(f)
-            if "_settings" not in config: config["_settings"] = {"public_access": False, "default_landing_page": "🧭 Traveler Guide"}
+            if "_settings" not in config: config["_settings"] = {"public_access": False, "default_landing_page": "🌍 Country Comparison"}
             if "_sponsors" not in config: config["_sponsors"] = {"General": []}
             if "_stats" not in config: config["_stats"] = {"daily": {}, "total": {}}
             return config
-    return {"_settings": {"public_access": False}, "_stats": {"daily": {}, "total": {}}}
+    return {"_settings": {"public_access": False, "default_landing_page": "🌍 Country Comparison"}, "_stats": {"daily": {}, "total": {}}}
 
 def save_config(config):
     with open(USERS_FILE, 'w') as f: json.dump(config, f, indent=4)
@@ -29,14 +29,16 @@ def save_config(config):
 def track_page_view(page_name):
     config = load_config()
     today = datetime.now().strftime("%Y-%m-%d")
-    stats = config["_stats"]
+    stats = config.setdefault("_stats", {"daily": {}, "total": {}})
     
     # Daily stats
-    if today not in stats["daily"]: stats["daily"][today] = {}
-    stats["daily"][today][page_name] = stats["daily"][today].get(page_name, 0) + 1
+    daily = stats.setdefault("daily", {})
+    day_stats = daily.setdefault(today, {})
+    day_stats[page_name] = day_stats.get(page_name, 0) + 1
     
     # Total stats
-    stats["total"][page_name] = stats["total"].get(page_name, 0) + 1
+    total = stats.setdefault("total", {})
+    total[page_name] = total.get(page_name, 0) + 1
     
     save_config(config)
 
@@ -50,11 +52,10 @@ def update_last_login(username):
 # --- DATA CONFIG ---
 # ======================================================================================
 CITIES_DATA = {
-   
- "Paris": {"file": "Paris_updated.xlsx", "emoji": "🗼"},
+    "Paris": {"file": "Paris_updated", "emoji": "🗼"},
     "Dubai": {"file": "Dubai.xlsx", "emoji": "🏙️"},
-    "NewYork": {"file": "NewYork.xlsx", "emoji": "🕌"},
-  #  "Cairo": {"file": "cairo_hotels.xlsx", "emoji": "🏛️"}
+    "Istanbul": {"file": "istanbul.xlsx", "emoji": "🕌"},
+    "NewYork": {"file": "NewYork.xlsx", "emoji": "🏛️"}
 }
 
 # ======================================================================================
@@ -96,7 +97,7 @@ def load_data(file_path):
             'Hotel': find_column(df, ['Hotel_Name', 'hotel_name', 'hotel', 'Hotel']),
             'Rate': find_column(df, ['Rate', 'rating', 'Rating']),
             'Star': find_column(df, ['Star', 'stars', 'Stars']),
-            'P1': find_column(df, ['Price1', 'price1', 'Price 1', 'Price', 'price', 'Rate']),
+            'P1': find_column(df, ['Price1', 'price1', 'Price 1', 'Price', 'price']),
             'P2': find_column(df, ['price2', 'Price2', 'Price 2']),
             'P3': find_column(df, ['price3', 'Price3', 'Price 3']),
             'Place1': find_column(df, ['Place1', 'place1']),
@@ -120,8 +121,6 @@ def load_data(file_path):
         df['Rate'] = pd.to_numeric(df[col_map['Rate']], errors='coerce').fillna(0)
         df['Star'] = pd.to_numeric(df[col_map['Star']].astype(str).str.extract(r'(\d+)')[0], errors='coerce').fillna(0)
         df['booking_dt'] = try_parse_dates(df[col_map['BookingDate']])
-        
-        # Pre-calculate Value Score safely to avoid UnboundLocalError later
         df['Value_Score'] = df['Rate'] / df['Best_Price'].replace(0, np.nan)
         
         days_map = {'Monday': 0, 'Tuesday': 1, 'Wednesday': 2, 'Thursday': 3, 'Friday': 4, 'Saturday': 5, 'Sunday': 6}
@@ -147,39 +146,32 @@ def generate_fun_facts(df, col_map, city, lang="English"):
     facts = []
     if df.empty: return ["No data available"]
     h_col = col_map['Hotel']
-    
     def add_fact(func):
         try:
-            res = func()
+            res = func(); 
             if res: facts.append(res)
         except: pass
 
-    # Target 30+ Facts
     add_fact(lambda: f"💰 Cheapest: **{df.loc[df['Best_Price'].idxmin(), h_col]}** at ${df['Best_Price'].min():.0f}." if lang=="English" else f"💰 أرخص فندق: **{df.loc[df['Best_Price'].idxmin(), h_col]}** بـ ${df['Best_Price'].min():.0f}.")
     add_fact(lambda: f"💎 Most expensive: **{df.loc[df['Best_Price'].idxmax(), h_col]}** at ${df['Best_Price'].max():.0f}." if lang=="English" else f"💎 أغلى فندق: **{df.loc[df['Best_Price'].idxmax(), h_col]}** بـ ${df['Best_Price'].max():.0f}.")
     add_fact(lambda: f"🌟 Top rated: **{df.loc[df['Rate'].idxmax(), h_col]}** ({df['Rate'].max()}/10)." if lang=="English" else f"🌟 الأعلى تقييماً: **{df.loc[df['Rate'].idxmax(), h_col]}** ({df['Rate'].max()}/10).")
     add_fact(lambda: f"📉 Market average: ${df['Best_Price'].mean():.0f}." if lang=="English" else f"📉 متوسط السعر: ${df['Best_Price'].mean():.0f}.")
     add_fact(lambda: f"🎯 Best deal: **{df.loc[df['Value_Score'].idxmax(), h_col]}**." if lang=="English" else f"🎯 أفضل صفقة: **{df.loc[df['Value_Score'].idxmax(), h_col]}**.")
-    
     add_fact(lambda: f"📊 {len(df)} offers analyzed." if lang=="English" else f"📊 تم تحليل {len(df)} عرض.")
     add_fact(lambda: f"🏢 {df[h_col].nunique()} unique hotels found." if lang=="English" else f"🏢 تم العثور على {df[h_col].nunique()} فندق فريد.")
     add_fact(lambda: f"⭐ {len(df[df['Star'] == 5])} luxury 5-star options." if lang=="English" else f"⭐ {len(df[df['Star'] == 5])} خيار 5 نجوم.")
     add_fact(lambda: f"🏨 {len(df[df['Star'] == 3])} budget 3-star options." if lang=="English" else f"🏨 {len(df[df['Star'] == 3])} خيار 3 نجوم.")
-    
     if not df['days_before'].dropna().empty:
         add_fact(lambda: f"📅 Tip: Booking {int(df.groupby('days_before')['Best_Price'].mean().idxmin())} days ahead is cheapest." if lang=="English" else f"📅 نصيحة: الحجز قبل {int(df.groupby('days_before')['Best_Price'].mean().idxmin())} يوم.")
-
     add_fact(lambda: f"🌐 **{df[col_map['Place1']].value_counts().idxmax()}** dominates market listings." if lang=="English" else f"🌐 **{df[col_map['Place1']].value_counts().idxmax()}** تهيمن على قوائم السوق.")
     add_fact(lambda: f"📈 Price gap: {df['Best_Price'].max()/df['Best_Price'].min():.1f}x." if lang=="English" else f"📈 فجوة السعر: {df['Best_Price'].max()/df['Best_Price'].min():.1f} ضعف.")
     add_fact(lambda: f"🏆 {len(df[df['Rate'] >= 9])} hotels are 'Excellent' (9+)." if lang=="English" else f"🏆 {len(df[df['Rate'] >= 9])} فندق بتقييم 'ممتاز'.")
     add_fact(lambda: f"📉 {len(df[df['Best_Price'] < df['Best_Price'].mean()])} hotels are below average price." if lang=="English" else f"📉 {len(df[df['Best_Price'] < df['Best_Price'].mean()])} فندق تحت المتوسط.")
-    
     add_fact(lambda: f"🌊 {len(df[df[col_map['Desc']].str.contains('view', case=False, na=False)])} hotels mention 'View'." if lang=="English" else f"🌊 {len(df[df[col_map['Desc']].str.contains('view', case=False, na=False)])} يذكر 'إطلالة'.")
     add_fact(lambda: f"🏊 {len(df[df[col_map['Desc']].str.contains('pool', case=False, na=False)])} hotels mention 'Pool'." if lang=="English" else f"🏊 {len(df[df[col_map['Desc']].str.contains('pool', case=False, na=False)])} يذكر 'مسبح'.")
     add_fact(lambda: f"🍽️ {len(df[df[col_map['Desc']].str.contains('breakfast', case=False, na=False)])} mention 'Breakfast'." if lang=="English" else f"🍽️ {len(df[df[col_map['Desc']].str.contains('breakfast', case=False, na=False)])} يذكر 'إفطار'.")
     add_fact(lambda: f"✨ 5-Star average: ${df[df['Star'] == 5]['Best_Price'].mean():.0f}." if lang=="English" else f"✨ متوسط سعر الـ 5 نجوم: ${df[df['Star'] == 5]['Best_Price'].mean():.0f}.")
     add_fact(lambda: f"🔍 {len(df[df['Rate'] < 7])} hotels are below 7/10 rating." if lang=="English" else f"🔍 {len(df[df['Rate'] < 7])} فندق تقييمهم أقل من 7.")
-    
     add_fact(lambda: f"🏘️ **{df.groupby(col_map['Location'])['Best_Price'].mean().idxmax()}** is the premium area." if lang=="English" else f"🏘️ **{df.groupby(col_map['Location'])['Best_Price'].mean().idxmax()}** هي المنطقة الأغلى.")
     add_fact(lambda: f"🏷️ **{df.groupby(col_map['Location'])['Best_Price'].mean().idxmin()}** is the value area." if lang=="English" else f"🏷️ **{df.groupby(col_map['Location'])['Best_Price'].mean().idxmin()}** هي المنطقة الأوفر.")
     add_fact(lambda: f"📅 Analysis covers {df[col_map['ArrivalDay']].nunique()} arrival days." if lang=="English" else f"📅 التحليل يغطي {df[col_map['ArrivalDay']].nunique()} يوم وصول.")
@@ -189,20 +181,19 @@ def generate_fun_facts(df, col_map, city, lang="English"):
     add_fact(lambda: f"✅ {len(df.dropna(subset=[col_map['Desc']]))} hotels have descriptions." if lang=="English" else f"✅ {len(df.dropna(subset=[col_map['Desc']]))} فندق لديهم وصف.")
     add_fact(lambda: f"🌟 {len(df[df['Rate'] > 8.5])} hotels are 'Top Choice'." if lang=="English" else f"🌟 {len(df[df['Rate'] > 8.5])} فندق هي 'خيار ممتاز'.")
     add_fact(lambda: f"📈 Market volatility is high this month." if lang=="English" else f"📈 تقلب الأسعار مرتفع هذا الشهر.")
-    add_fact(lambda: f"🚀 Analytics V33 Engine running." if lang=="English" else f"🚀 محرك التحليل V33 يعمل.")
+    add_fact(lambda: f"🚀 Analytics V34 Engine running." if lang=="English" else f"🚀 محرك التحليل V34 يعمل.")
     add_fact(lambda: f"🏨 {df[col_map['Place1']].nunique()} platforms integrated." if lang=="English" else f"🏨 تم دمج {df[col_map['Place1']].nunique()} منصة.")
     add_fact(lambda: f"📅 Avg booking window: {df['days_before'].mean():.0f} days." if lang=="English" else f"📅 متوسط نافذة الحجز {df['days_before'].mean():.0f} يوم.")
     add_fact(lambda: f"⭐ Most common: {df['Star'].mode()[0]:.0f}-star category." if lang=="English" else f"⭐ الفئة الأكثر شيوعاً: {df['Star'].mode()[0]:.0f} نجوم.")
     add_fact(lambda: f"💎 {len(df[df['Rate'] > 9.5])} ultra-premium ratings." if lang=="English" else f"💎 تم العثور على {len(df[df['Rate'] > 9.5])} تقييم فائق.")
     add_fact(lambda: f"💼 Business district: {df.groupby(col_map['Location'])[col_map['Hotel']].count().idxmax()}." if lang=="English" else f"💼 منطقة الأعمال: {df.groupby(col_map['Location'])[col_map['Hotel']].count().idxmax()}.")
     add_fact(lambda: f"🔍 {len(df[df['Best_Price'] > df['Best_Price'].median()])} hotels above median price." if lang=="English" else f"🔍 {len(df[df['Best_Price'] > df['Best_Price'].median()])} فندق فوق وسيط السعر.")
-
     return facts
 
 # ======================================================================================
 # --- MAIN APP ---
 # ======================================================================================
-st.set_page_config(page_title="Hotel Analytics", page_icon="🏨", layout="wide")
+st.set_page_config(page_title="Hotel Analytics Pro V34", page_icon="🏨", layout="wide")
 
 def main():
     config = load_config()
@@ -211,15 +202,22 @@ def main():
     if 'logged_in' not in st.session_state: st.session_state.logged_in = False
     if 'admin_login_mode' not in st.session_state: st.session_state.admin_login_mode = False
     
-    # Public Access
+    # SECURITY FIX: Public Access Logic
     if not st.session_state.logged_in and settings.get("public_access", False) and not st.session_state.admin_login_mode:
-        test_user = config.get("test_blogger", config.get("admin"))
-        st.session_state.logged_in, st.session_state.username = True, "Public_Visitor"
-        st.session_state.role, st.session_state.allowed_pages = test_user.get("role", "blogger"), test_user.get("allowed_pages", ["all"])
+        # Strictly define Public Visitor Profile
+        st.session_state.logged_in = True
+        st.session_state.username = "Public_Visitor"
+        st.session_state.role = "blogger"
+        # Never allow 'all' or 'admin' page for public visitors
+        st.session_state.allowed_pages = ["comparison", "dashboard", "fun_facts", "guide"]
         st.session_state.is_public = True
-    
+        # Force Landing Page on first entry
+        if 'first_entry' not in st.session_state:
+            st.session_state.first_entry = True
+            st.session_state.current_page = settings.get("default_landing_page", "🌍 Country Comparison")
+
     if not st.session_state.logged_in:
-        st.title("🏨 Hotel Analytics")
+        st.title("🏨 Hotel Analytics Pro V34")
         with st.container(border=True):
             u = st.text_input("Username")
             p = st.text_input("Password", type="password")
@@ -235,6 +233,8 @@ def main():
                             st.session_state.role, st.session_state.allowed_pages = user['role'], user['allowed_pages']
                             st.session_state.is_public = False
                             st.session_state.admin_login_mode = False
+                            # Set default page on login
+                            st.session_state.current_page = settings.get("default_landing_page", "🌍 Country Comparison")
                             update_last_login(u)
                             st.rerun()
                 else: st.error("❌ Invalid Credentials")
@@ -244,40 +244,43 @@ def main():
                     st.rerun()
         return
 
-    # --- NAVIGATION ---
+    # --- NAVIGATION SETUP ---
     page_map = {
-        "admin": "⚙️ Admin Control Panel" , "guide": "🧭 Traveler Guide" ,"comparison": "🌍 Country Comparison", "dashboard": "📊 Dashboard",
+        "comparison": "🌍 Country Comparison", "dashboard": "📊 Dashboard",
         "trends": "📈 Trends & Patterns", "rankings": "🏆 Rankings",
         "tracker": "🔍 Price Tracker", "fun_facts": "🎉 Fun Facts",
         "location": "📍 By Location", "competitor": "⚔️ Competitor Analysis",
-         "custom_compare": "🎯 Custom Hotel Compare",
-        "partners": "🤝 Partners Marketplace", 
+        "guide": "🧭 Traveler Guide", "custom_compare": "🎯 Custom Hotel Compare",
+        "partners": "🤝 Partners Marketplace", "admin": "⚙️ Admin Control Panel"
     }
     
     raw_allowed = st.session_state.allowed_pages
-    if "all" in raw_allowed: nav_options = list(page_map.values())
+    nav_options = []
+    
+    # Filter pages based on role and allowed_pages
+    if st.session_state.role == "admin":
+        nav_options = list(page_map.values())
     else:
-        nav_options = []
-        for p in raw_allowed:
-            if p in page_map: nav_options.append(page_map[p])
-            elif p in page_map.values(): nav_options.append(p)
-        default_p = settings.get("default_landing_page", "🧭 Traveler Guide")
-        if default_p not in nav_options: nav_options.insert(0, default_p)
-        if st.session_state.role == "admin" and page_map["admin"] not in nav_options: nav_options.append(page_map["admin"])
+        # Public or regular users
+        for p_key, p_name in page_map.items():
+            if p_key in raw_allowed or p_name in raw_allowed:
+                # STRICT SECURITY: Never allow Admin page for non-admins
+                if p_key != "admin": nav_options.append(p_name)
+    
+    # Ensure default landing page is available and first if not set
+    default_p = settings.get("default_landing_page", "🌍 Country Comparison")
+    if default_p not in nav_options and not st.session_state.is_public:
+        # Only add if it's not the admin page
+        if default_p != page_map["admin"]: nav_options.insert(0, default_p)
 
+    # Validate current_page
     if 'current_page' not in st.session_state or st.session_state.current_page not in nav_options:
         st.session_state.current_page = nav_options[0]
-
-    def on_nav_change(): st.session_state.current_page = st.session_state.nav_radio
-    selected_page = st.sidebar.radio("Navigation", nav_options, index=nav_options.index(st.session_state.current_page), key="nav_radio", on_change=on_nav_change)
-
-    # Track View
-    track_page_view(selected_page)
 
     # --- SIDEBAR ---
     st.sidebar.title(f"🚀 {st.session_state.username}")
     if st.session_state.get("is_public", False): 
-        if st.sidebar.button("Login"):
+        if st.sidebar.button("🔐 Admin Login"):
             st.session_state.logged_in = False
             st.session_state.is_public = False
             st.session_state.admin_login_mode = True
@@ -285,9 +288,15 @@ def main():
     
     # Marketing Messages
     if st.session_state.role == "blogger":
-        st.sidebar.info("✨ **Bloggers:** We can create custom daily topics and exclusive stats just for you! Contact us.")
+        st.sidebar.info("✨ **Bloggers:** We can create custom daily topics and exclusive stats just for you!")
     if st.session_state.role == "company":
-        st.sidebar.success("📢 **Advertise Here:** Grow your business for just **$5/month**! Contact support.")
+        st.sidebar.success("📢 **Advertise Here:** Grow your business for just **$5/month**!")
+
+    def on_nav_change(): st.session_state.current_page = st.session_state.nav_radio
+    selected_page = st.sidebar.radio("Navigation", nav_options, index=nav_options.index(st.session_state.current_page), key="nav_radio", on_change=on_nav_change)
+
+    # Track View
+    track_page_view(selected_page)
 
     # --- SHARED FILTERS & SPONSORS ---
     city = None
@@ -365,21 +374,14 @@ def main():
                 save_config(config); st.success("Updated!"); st.rerun()
         with tab3:
             st.subheader("Page View Statistics")
-            today = datetime.now().strftime("%Y-%m-%d")
-            yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
-            
-            stats = config["_stats"]
-            daily_today = stats["daily"].get(today, {})
-            daily_yesterday = stats["daily"].get(yesterday, {})
-            total_stats = stats["total"]
-            
+            stats = config.get("_stats", {"daily": {}, "total": {}})
             summary = []
             for p in page_map.values():
                 summary.append({
                     "Page": p,
-                    "Today": daily_today.get(p, 0),
-                    "Yesterday": daily_yesterday.get(p, 0),
-                    "Total": total_stats.get(p, 0)
+                    "Today": stats["daily"].get(datetime.now().strftime("%Y-%m-%d"), {}).get(p, 0),
+                    "Yesterday": stats["daily"].get((datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d"), {}).get(p, 0),
+                    "Total": stats["total"].get(p, 0)
                 })
             st.dataframe(pd.DataFrame(summary), hide_index=True, use_container_width=True)
 
@@ -388,7 +390,7 @@ def main():
         df, col_map, err = load_data(CITIES_DATA[city]['file'])
         if err: st.warning(f"⚠️ {err}"); return
         
-        if st.sidebar.radio("Snapshot", ["All Data", "Latest Only"], key="snap") == "Latest Only":
+        if data_mode == "Latest Snapshot Only":
             latest_b = df[col_map['BookingDate']].dropna().max()
             df = df[df[col_map['BookingDate']] == latest_b]
 
