@@ -372,7 +372,7 @@ def main():
             if st.button("Save Settings"):
                 config["_settings"] = settings
                 save_config(config); st.success("Updated!"); st.rerun()
-       with tab3:
+        with tab3:
 
             st.subheader("Page View Statistics")
 
