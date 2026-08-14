@@ -421,7 +421,7 @@ def main():
             st.dataframe(df_summary, hide_index=True, use_container_width=True) 
 
 
-        else:
+      else:
         # --- CITY PAGES ---
         df, col_map, err = load_data(CITIES_DATA[city]['file'])
         if err: st.warning(f"⚠️ {err}"); return
