@@ -202,7 +202,7 @@ def generate_fun_facts(df, col_map, city, lang="English"):
 # ======================================================================================
 # --- MAIN APP ---
 # ======================================================================================
-st.set_page_config(page_title="Hotel Analytics Pro V33", page_icon="🏨", layout="wide")
+st.set_page_config(page_title="Hotel Analytics", page_icon="🏨", layout="wide")
 
 def main():
     config = load_config()
