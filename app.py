@@ -261,7 +261,7 @@ def main():
         for p in raw_allowed:
             if p in page_map: nav_options.append(page_map[p])
             elif p in page_map.values(): nav_options.append(p)
-        default_p = settings.get("default_landing_page", "🌍 Country Comparison")
+        default_p = settings.get("default_landing_page", "🧭 Traveler Guide")
         if default_p not in nav_options: nav_options.insert(0, default_p)
         if st.session_state.role == "admin" and page_map["admin"] not in nav_options: nav_options.append(page_map["admin"])
 
