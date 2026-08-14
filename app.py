@@ -250,7 +250,7 @@ def main():
         "trends": "📈 Trends & Patterns", "rankings": "🏆 Rankings",
         "tracker": "🔍 Price Tracker", "fun_facts": "🎉 Fun Facts",
         "location": "📍 By Location", "competitor": "⚔️ Competitor Analysis",
-       , "custom_compare": "🎯 Custom Hotel Compare",
+         "custom_compare": "🎯 Custom Hotel Compare",
         "partners": "🤝 Partners Marketplace", "admin": "⚙️ Admin Control Panel"
     }
     
