@@ -38,7 +38,7 @@
         {
             "name": "🏨 Trip.com Deal Finder",
             "type": "html",
-            "html_code": "<script async src=\"https://trpwdg.com/content?currency=USD&trs=560480&shmarker=205315&language=en&theme=1&powered_by=true&campaign_id=1&promo_id=1486\" charset=\"utf-8\"></script>",
+            "html_code": "<script async src=\"<script async src="https://trpwdg.com/content?currency=USD&trs=560480&shmarker=205315&language=en&theme=1&powered_by=true&campaign_id=1&promo_id=1486" charset="utf-8"></script>",
             "height": 400
         },
         {
