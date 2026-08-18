@@ -36,10 +36,11 @@
     },
     "_affiliate_widgets": [
         {
-            "name": "🏨 Trip.com Deal Finder",
+            "name": "🏨 Kiwitaxi is an online booking platform of individual transfer servicies and private car tours",
             "type": "html",
             "html_code": "<script async src=\"<script async src="",
-            "height": 400
+            "link": "https://kiwitaxi.tpo.lu/JOTFHwfH"
+           # "height": 400
         },
         {
             "name": "🚗 Car Rental",
