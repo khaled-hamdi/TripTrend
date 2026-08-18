@@ -1,7 +1,7 @@
 {
     "_settings": {
         "public_access": false,
-        "default_landing_page": "🧭 Traveler Guide"
+        "default_landing_page": "🌍 Country Comparison"
     },
     "admin": {
         "password": "admin123",
@@ -11,10 +11,10 @@
         "expiry_date": "2099-12-31",
         "status": "active"
     },
-    "test": {
-        "password": "123456",
+    "test_blogger": {
+        "password": "test123",
         "role": "blogger",
-        "allowed_pages": ["dashboard", "fun_facts", "guide", "comparison","trends","rankings","tracker","custom_compare","partners","location"],
+        "allowed_pages": ["dashboard", "fun_facts", "guide", "comparison", "trends", "tracker"],
         "last_login": "N/A",
         "expiry_date": "2026-08-22",
         "status": "active"
@@ -22,22 +22,48 @@
     "test_company": {
         "password": "comp123",
         "role": "company",
-        "allowed_pages": ["dashboard", "fun_facts", "guide", "comparison","trends","rankings","tracker","custom_compare","Partners","Competitor"],
+        "allowed_pages": ["dashboard", "trends", "tracker", "competitor"],
         "last_login": "N/A",
         "expiry_date": "2026-09-22",
         "status": "active"
     },
+    "_affiliate_networks": {
+        "Booking.com": "https://www.booking.com/index.html?aid=YOUR_ID",
+        "Trip.com": "https://www.trip.com/?allianceid=YOUR_ID",
+        "Agoda": "https://www.agoda.com/?cid=YOUR_ID",
+        "Expedia": "https://www.expedia.com/?siteid=YOUR_ID",
+        "Hotels.com": "https://www.hotels.com/?pos=YOUR_ID"
+    },
+    "_affiliate_widgets": [
+        {"name": "🚗 Car Rental", "desc": "Best prices for car rentals globally", "link": "https://rentalcars.com/?affiliate=YOUR_ID"},
+        {"name": "📱 Travel SIM", "desc": "Stay connected with eSIM for $5", "link": "https://airalo.com/?ref=YOUR_ID"},
+        {"name": "✈️ Cheap Flights", "desc": "Compare 1000+ airlines instantly", "link": "https://skyscanner.com/?affiliate=YOUR_ID"}
+    ],
     "_sponsors": {
         "Paris": [
-            {"name": "Paris Elite Tours", "desc": "Best private guides in Paris", "link": ""},
-            {"name": "Seine River Cruises", "desc": "Exclusive dinner cruises", "link": ""}
+            {"name": "Paris Elite Tours", "desc": "Best private guides in Paris", "link": "https://example.com/paris"},
+            {"name": "Seine River Cruises", "desc": "Exclusive dinner cruises", "link": "https://example.com/seine"}
         ],
         "Dubai": [
-            {"name": "Desert Safari Pro", "desc": "Premium desert adventures", "link": ""},
-            {"name": "Burj View Dining", "desc": "Best views in the city", "link": ""}
+            {"name": "Desert Safari Pro", "desc": "Premium desert adventures", "link": "https://example.com/dubai"},
+            {"name": "Burj View Dining", "desc": "Best views in the city", "link": "https://example.com/burj"}
         ],
         "General": [
-            {"name": "Manus Travel Insurance", "desc": "Safe travels everywhere", "link": ""}
+            {"name": "Manus Travel Insurance", "desc": "Safe travels everywhere", "link": "https://help.manus.im"}
         ]
+    },
+    "_travel_tips": [
+        "💡 Always book 2-3 weeks in advance for European cities.",
+        "💡 Use a VPN to check prices from different regions.",
+        "💡 Tuesdays and Wednesdays are usually the cheapest flight days.",
+        "💡 Local SIM cards are 70% cheaper than roaming."
+    ],
+    "_paid_ads": [
+        {"name": "Travel With Ahmed", "desc": "Follow for daily luxury deals in Dubai", "link": "https://facebook.com/ahmed_travel"},
+        {"name": "Sky High Agency", "desc": "Special 20% discount on group tours", "link": "https://agency.com"}
+    ],
+    "_stats": {
+        "daily": {},
+        "total": {}
     }
 }
