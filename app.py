@@ -452,7 +452,7 @@ def main():
                 display_cols.append({
                     "Hotel": row[col_map['Hotel']], "Old Price": f"${row['Hist_Avg']:.0f}" if pd.notnull(row['Hist_Avg']) else "N/A",
                     "New Price": f"${row['Best_Price']:.0f}", "Discount": f"-{row['Drop_Pct']:.0f}%" if row['Drop_Pct'] > 0 else "N/A",
-                    "Arrival": row[col_map['ArrivalDay']], "Company": comp, "Affiliate": "✅ Available" if comp in aff_links else "❌ N/A"
+                    "Arrival": row[col_map['ArrivalDay']], "Company": comp, "Available": "✅ Available" if comp in aff_links else "❌ N/A"
                 })
             st.dataframe(pd.DataFrame(display_cols), hide_index=True, use_container_width=True)
 
