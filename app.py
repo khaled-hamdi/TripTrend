@@ -226,7 +226,7 @@ def main():
         "trends": "📈 Market Intelligence", "rankings": "🏆 Rankings",
         "tracker": "🔥 Deal Radar", "fun_facts": "🎉 Fun Facts",
         "location": "📍 By Location", "competitor": "⚔️ Competitor Analysis",
-        "guide": "🧭 Traveler Guide ", "custom_compare": "🎯 Custom Hotel Compare",
+        "guide": "🧭 Traveler Guide & ads", "custom_compare": "🎯 Custom Hotel Compare",
         "partners": "🤝 Partners Marketplace", "admin": "⚙️ Admin Control Panel"
     }
     
@@ -502,7 +502,7 @@ def main():
                 st.dataframe(comps[[col_map['Hotel'], 'Best_Price', 'Booking Company', 'Rate', 'Star', col_map['ArrivalDay']]].sort_values('Best_Price'), hide_index=True)
 
         elif selected_page == "🧭 Traveler Guide & Ads":
-            st.title("🧭 Traveler Guide & Premium Tips")
+            st.title("🧭 Traveler Guide & Ads & Premium Tips")
             
             col1, col2 = st.columns([2, 1])
             with col1:
