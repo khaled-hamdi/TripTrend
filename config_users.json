@@ -35,9 +35,24 @@
         "Hotels.com": "https://www.hotels.com/?pos=YOUR_ID"
     },
     "_affiliate_widgets": [
-        {"name": "🚗 Car Rental", "desc": "Best prices for car rentals globally", "link": "https://rentalcars.com/?affiliate=YOUR_ID"},
-        {"name": "📱 Kiwi.com", "desc": "Stay connected with eSIM for $5", "link": "<script async src="https://trpwdg.com/content?currency=usd&trs=560480&shmarker=205315&powered_by=true&locale=en&campaign_id=111&promo_id=4484" charset="utf-8"></script>"},
-        {"name": "✈️ Cheap Flights", "desc": "Compare 1000+ airlines instantly", "link": "https://skyscanner.com/?affiliate=YOUR_ID"}
+        {
+            "name": "🏨 Trip.com Deal Finder",
+            "type": "html",
+            "html_code": "<script async src=\"https://trpwdg.com/content?currency=USD&trs=560480&shmarker=205315&language=en&theme=1&powered_by=true&campaign_id=1&promo_id=1486\" charset=\"utf-8\"></script>",
+            "height": 400
+        },
+        {
+            "name": "🚗 Car Rental",
+            "type": "link",
+            "desc": "Best prices for car rentals globally",
+            "link": "https://rentalcars.com/?affiliate=YOUR_ID"
+        },
+        {
+            "name": "📱 Travel SIM",
+            "type": "link",
+            "desc": "Stay connected with eSIM for $5",
+            "link": "https://airalo.com/?ref=YOUR_ID"
+        }
     ],
     "_sponsors": {
         "Paris": [
