@@ -71,7 +71,7 @@ def update_last_login(username):
 # --- DATA CONFIG ---
 # ======================================================================================
 CITIES_DATA = {
-    "Paris": {"file": "paris.xlsx", "emoji": "🗼"},
+    "Paris": {"file": "Paris.xlsx", "emoji": "🗼"},
     "Dubai": {"file": "Dubai.xlsx", "emoji": "🏙️"},
     "Istanbul": {"file": "istanbul_hotels.xlsx", "emoji": "🕌"},
     "NewYork": {"file": "NewYork.xlsx", "emoji": "🏛️"}
