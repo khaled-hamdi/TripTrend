@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
@@ -51,10 +52,10 @@ def update_last_login(username):
 # --- DATA CONFIG ---
 # ======================================================================================
 CITIES_DATA = {
-    "Paris": {"file": "Paris_updated.xlsx", "emoji": "🗼"},
+    "Paris": {"file": "Paris_updayed.xlsx", "emoji": "🗼"},
     "Dubai": {"file": "Dubai.xlsx", "emoji": "🏙️"},
-    "Istanbul": {"file": "istanbul_hotels.xlsx", "emoji": "🕌"},
-    "NewYork": {"file": "NewYork.xlsx", "emoji": "🏛️"}
+    "NewYork": {"file": "NewYork.xlsx", "emoji": "🕌"},
+    "Cairo": {"file": "cairo_hotels.xlsx", "emoji": "🏛️"}
 }
 
 # ======================================================================================
@@ -162,18 +163,26 @@ def generate_fun_facts(df, col_map, city, lang="English"):
         add_fact(lambda: f"📅 Tip: Booking {int(df.groupby('days_before')['Best_Price'].mean().idxmin())} days ahead is cheapest." if lang=="English" else f"📅 نصيحة: الحجز قبل {int(df.groupby('days_before')['Best_Price'].mean().idxmin())} يوم.")
     add_fact(lambda: f"📈 Price gap: {df['Best_Price'].max()/df['Best_Price'].min():.1f}x." if lang=="English" else f"📈 فجوة السعر: {df['Best_Price'].max()/df['Best_Price'].min():.1f} ضعف.")
     add_fact(lambda: f"🏆 {len(df[df['Rate'] >= 9])} hotels are 'Excellent' (9+)." if lang=="English" else f"🏆 {len(df[df['Rate'] >= 9])} فندق بتقييم 'ممتاز'.")
-    add_fact(lambda: f"✨ 5-Star average: ${df[df['Star'] == 5]['Best_Price'].mean():.0f}." if lang=="English" else f"✨ متوسط سعر الـ 5 نجوم: ${df[df['Star'] == 5]['Best_Price'].mean():.0f}.")
     add_fact(lambda: f"🏘️ **{df.groupby(col_map['Location'])['Best_Price'].mean().idxmax()}** is the premium area." if lang=="English" else f"🏘️ **{df.groupby(col_map['Location'])['Best_Price'].mean().idxmax()}** هي المنطقة الأغلى.")
     add_fact(lambda: f"🌞 Arriving on **{df.groupby(col_map['ArrivalDay'])['Best_Price'].mean().idxmin()}** is cheaper." if lang=="English" else f"🌞 الوصول يوم **{df.groupby(col_map['ArrivalDay'])['Best_Price'].mean().idxmin()}** أرخص.")
-    add_fact(lambda: f"🚀 Analytics V35 Engine running." if lang=="English" else f"🚀 محرك التحليل V35 يعمل.")
-    # ... and many more to reach 30+
+    add_fact(lambda: f"🚀 Analytics V37 Engine running." if lang=="English" else f"🚀 محرك التحليل V37 يعمل.")
     for i in range(15): add_fact(lambda: f"💡 Market insight #{i+15} generated for {city}." if lang=="English" else f"💡 رؤية سوقية #{i+15} تم توليدها لـ {city}.")
     return facts
+
+def render_widget(w):
+    """Universal widget renderer for both links and HTML/Scripts"""
+    with st.container(border=True):
+        st.markdown(f"**{w['name']}**")
+        if w.get('type') == 'html':
+            components.html(w['html_code'], height=w.get('height', 400), scrolling=True)
+        else:
+            st.caption(w.get('desc', ''))
+            st.link_button("Explore Service", w['link'], use_container_width=True)
 
 # ======================================================================================
 # --- MAIN APP ---
 # ======================================================================================
-st.set_page_config(page_title="Hotel Analytics Pro V35", page_icon="🏨", layout="wide")
+st.set_page_config(page_title="Hotel Analytics Pro V37", page_icon="🏨", layout="wide")
 
 def main():
     config = load_config()
@@ -194,7 +203,7 @@ def main():
             st.session_state.current_page = settings.get("default_landing_page", "🌍 Country Comparison")
 
     if not st.session_state.logged_in:
-        st.title("🏨 Hotel Analytics Pro V35")
+        st.title("🏨 Hotel Analytics Pro V37")
         with st.container(border=True):
             u = st.text_input("Username")
             p = st.text_input("Password", type="password")
@@ -226,7 +235,7 @@ def main():
         "trends": "📈 Market Intelligence", "rankings": "🏆 Rankings",
         "tracker": "🔥 Deal Radar", "fun_facts": "🎉 Fun Facts",
         "location": "📍 By Location", "competitor": "⚔️ Competitor Analysis",
-        "guide": "🧭 Traveler Guide", "custom_compare": "🎯 Custom Hotel Compare",
+        "guide": "🧭 Traveler Guide & Ads", "custom_compare": "🎯 Custom Hotel Compare",
         "partners": "🤝 Partners Marketplace", "admin": "⚙️ Admin Control Panel"
     }
     
@@ -262,7 +271,7 @@ def main():
     
     # Marketing Messages
     if st.session_state.role == "blogger":
-        st.sidebar.info("✨ **Bloggers:** We create custom daily topics and exclusive stats just for you!")
+        st.sidebar.info("✨ **Bloggers:** Request custom topics and exclusive stats!")
     if st.session_state.role == "company":
         st.sidebar.success("📢 **Advertise Here:** Grow your business for just **$5/month**!")
 
@@ -281,11 +290,11 @@ def main():
                 st.markdown(f"**[{sp['name']}]({sp['link']})**")
                 st.caption(sp['desc'])
         
-        # Sidebar Affiliate Widgets
+        # Sidebar Affiliate Widgets (Limited to Link type for sidebar to save space)
         st.sidebar.markdown("---")
         st.sidebar.subheader("💡 Traveler Tools")
         widgets = config.get("_affiliate_widgets", [])
-        for w in widgets[:2]:
+        for w in [x for x in widgets if x.get('type') == 'link'][:2]:
             with st.sidebar.container(border=True):
                 st.markdown(f"**[{w['name']}]({w['link']})**")
                 st.caption(w['desc'])
@@ -314,8 +323,16 @@ def main():
             col_a, col_b = st.columns(2)
             col_a.plotly_chart(px.bar(stats_df, x='City', y='Avg Price', color='City', title="Average Market Price ($)"), use_container_width=True)
             col_b.plotly_chart(px.scatter(stats_df, x='Avg Price', y='Avg Rating', size='Hotels (Unique)', color='City', title="Price vs Quality Index"), use_container_width=True)
+            
             st.subheader("📊 Market Opportunity Gap Analysis")
             st.dataframe(stats_df[['City', 'Price Spread ($)', 'Luxury Share (%)', 'Hotels (Unique)']].sort_values('Price Spread ($)', ascending=False), hide_index=True, use_container_width=True)
+            
+            # HTML Widget Section
+            html_widgets = [w for w in config.get("_affiliate_widgets", []) if w.get('type') == 'html']
+            if html_widgets:
+                st.markdown("---")
+                st.subheader("🔥 Top Travel Deals")
+                for hw in html_widgets: render_widget(hw)
 
     elif selected_page == "🤝 Partners Marketplace":
         st.title("🤝 Partners & Sponsors Marketplace")
@@ -363,7 +380,7 @@ def main():
         df, col_map, err = load_data(CITIES_DATA[city]['file'])
         if err: st.warning(f"⚠️ {err}"); return
         
-        if data_mode == "Latest Snapshot Only":
+        if st.sidebar.radio("Snapshot", ["All Data", "Latest Only"], key="snap") == "Latest Only":
             latest_b = df[col_map['BookingDate']].dropna().max()
             df = df[df[col_map['BookingDate']] == latest_b]
 
@@ -383,74 +400,61 @@ def main():
 
         elif selected_page == "📈 Market Intelligence":
             st.markdown("### 📈 Market Intelligence & Trends")
-            # Intelligence Table
             day_stats = df.groupby(col_map['ArrivalDay'])['Best_Price'].agg(['mean', 'min', 'count']).reset_index()
             day_stats.columns = ['Arrival Day', 'Avg Price ($)', 'Min Price ($)', 'Hotel Offers']
             day_stats = day_stats.sort_values('Avg Price ($)')
-            
-            # Savings Index
             cheapest_day = day_stats.iloc[0]['Arrival Day']
             priciest_day = day_stats.iloc[-1]['Arrival Day']
             savings = day_stats['Avg Price ($)'].max() - day_stats['Avg Price ($)'].min()
             savings_pct = (savings / day_stats['Avg Price ($)'].max()) * 100
-            
             st.subheader("💡 Golden Days Analysis")
             st.dataframe(day_stats, hide_index=True, use_container_width=True)
-            
             st.success(f"💰 **Savings Index:** Booking on **{cheapest_day}** instead of **{priciest_day}** saves you **${savings:.0f}** ({savings_pct:.1f}%) on average this week!")
-            
-            st.info(f"✨ **Blogger Tip:** 'Planning a trip to {city}? Skip {priciest_day} and arrive on {cheapest_day} to save over {savings_pct:.0f}% on your hotel stay! #TravelHacks #{city}'")
+            st.info(f"✨ **Blogger Tip:** 'Planning a trip to {city}? Skip {priciest_day} and arrive on {cheapest_day} to save over {savings_pct:.0f}%! #TravelHacks #{city}'")
 
         elif selected_page == "🔥 Deal Radar":
             st.markdown("### 🔥 Deal Radar: Price Drop Tracker")
-            # Calculate historical average for each hotel/arrival_day
-            hist_avg = df.groupby([col_map['Hotel'], col_map['ArrivalDay']])['Best_Price'].transform('mean')
             latest_b = df[col_map['BookingDate']].dropna().max()
             latest_df = df[df[col_map['BookingDate']] == latest_b].copy()
-            
-            latest_df['Hist_Avg'] = df.groupby([col_map['Hotel'], col_map['ArrivalDay']])['Best_Price'].transform('mean')
-            latest_df['Price_Drop'] = latest_df['Hist_Avg'] - latest_df['Best_Price']
-            latest_df['Drop_Pct'] = (latest_df['Price_Drop'] / latest_df['Hist_Avg']) * 100
-            
-            drops = latest_df[latest_df['Price_Drop'] > 0].sort_values('Price_Drop', ascending=False).head(15)
-            
-            if drops.empty:
-                st.info("No significant price drops detected in the latest snapshot.")
-            else:
-                # Best Catch
-                best_catch = drops[drops['Rate'] >= 8].head(1)
-                if not best_catch.empty:
-                    with st.container(border=True):
-                        st.markdown("### 🏆 BEST CATCH OF THE DAY")
-                        bc = best_catch.iloc[0]
-                        c1, c2 = st.columns([2, 1])
-                        c1.markdown(f"#### 🏨 {bc[col_map['Hotel']]}")
-                        c1.write(f"⭐ {bc['Star']} Stars | 🌟 Rate: {bc['Rate']}/10")
-                        c1.markdown(f"**Price Crash:** ~~${bc['Hist_Avg']:.0f}~~ → **${bc['Best_Price']:.0f}** (-{bc['Drop_Pct']:.0f}%)")
-                        
-                        comp = get_booking_company(bc, col_map)
-                        aff_links = config.get("_affiliate_networks", {})
-                        if comp in aff_links:
-                            c2.link_button(f"🔥 Book via {comp}", aff_links[comp], type="primary")
-                        else:
-                            c2.button("Check Deal", disabled=True)
+            historical_data = df[df[col_map['BookingDate']] < latest_b]
+            if not historical_data.empty:
+                hist_avg = historical_data.groupby([col_map['Hotel'], col_map['ArrivalDay']])['Best_Price'].mean().reset_index()
+                hist_avg.columns = [col_map['Hotel'], col_map['ArrivalDay'], 'Hist_Avg']
+                latest_df = latest_df.merge(hist_avg, on=[col_map['Hotel'], col_map['ArrivalDay']], how='left')
+                latest_df['Price_Drop'] = latest_df['Hist_Avg'] - latest_df['Best_Price']
+                latest_df['Drop_Pct'] = (latest_df['Price_Drop'] / latest_df['Hist_Avg']) * 100
+                drops = latest_df[latest_df['Price_Drop'] > 0].sort_values('Price_Drop', ascending=False).head(15)
+            else: drops = pd.DataFrame()
 
-                st.subheader("📉 Top Price Drops Found")
-                aff_links = config.get("_affiliate_networks", {})
-                
-                display_cols = []
-                for _, row in drops.iterrows():
-                    comp = get_booking_company(row, col_map)
-                    display_cols.append({
-                        "Hotel": row[col_map['Hotel']],
-                        "Old Price": f"${row['Hist_Avg']:.0f}",
-                        "New Price": f"${row['Best_Price']:.0f}",
-                        "Discount": f"-{row['Drop_Pct']:.0f}%",
-                        "Arrival": row[col_map['ArrivalDay']],
-                        "Company": comp,
-                        "Available": "✅ Available" if comp in aff_links else "❌ N/A"
-                    })
-                st.dataframe(pd.DataFrame(display_cols), hide_index=True, use_container_width=True)
+            if drops.empty:
+                st.info("⚠️ Showing **Best Current Value Deals** (Insufficient history for drop tracking).")
+                drops = latest_df.sort_values('Value_Score', ascending=False).head(15)
+                drops['Hist_Avg'] = np.nan; drops['Price_Drop'] = 0; drops['Drop_Pct'] = 0
+
+            best_catch = drops[drops['Rate'] >= 8].head(1)
+            if not best_catch.empty:
+                with st.container(border=True):
+                    st.markdown("### 🏆 BEST CATCH OF THE DAY")
+                    bc = best_catch.iloc[0]; c1, c2 = st.columns([2, 1])
+                    c1.markdown(f"#### 🏨 {bc[col_map['Hotel']]}")
+                    c1.write(f"⭐ {bc['Star']} Stars | 🌟 Rate: {bc['Rate']}/10")
+                    if pd.notnull(bc['Hist_Avg']): c1.markdown(f"**Price Crash:** ~~${bc['Hist_Avg']:.0f}~~ → **${bc['Best_Price']:.0f}** (-{bc['Drop_Pct']:.0f}%)")
+                    else: c1.markdown(f"**Best Price Found:** **${bc['Best_Price']:.0f}**")
+                    comp = get_booking_company(bc, col_map); aff_links = config.get("_affiliate_networks", {})
+                    if comp in aff_links: c2.link_button(f"🔥 Book via {comp}", aff_links[comp], type="primary")
+                    else: c2.button("Check Deal", disabled=True)
+
+            st.subheader("📉 Top Deals & Drops")
+            aff_links = config.get("_affiliate_networks", {})
+            display_cols = []
+            for _, row in drops.iterrows():
+                comp = get_booking_company(row, col_map)
+                display_cols.append({
+                    "Hotel": row[col_map['Hotel']], "Old Price": f"${row['Hist_Avg']:.0f}" if pd.notnull(row['Hist_Avg']) else "N/A",
+                    "New Price": f"${row['Best_Price']:.0f}", "Discount": f"-{row['Drop_Pct']:.0f}%" if row['Drop_Pct'] > 0 else "N/A",
+                    "Arrival": row[col_map['ArrivalDay']], "Company": comp, "Affiliate": "✅ Available" if comp in aff_links else "❌ N/A"
+                })
+            st.dataframe(pd.DataFrame(display_cols), hide_index=True, use_container_width=True)
 
         elif selected_page == "🏆 Rankings":
             st.markdown("### 🏆 Top Rankings")
@@ -464,10 +468,8 @@ def main():
                             c1, c2 = st.columns([3, 1])
                             c1.subheader(f"🏨 {row[col_map['Hotel']]}")
                             c1.write(f"💰 Best Price: ${row['Best_Price']:.0f} | ⭐ Rate: {row['Rate']}/10")
-                            comp = get_booking_company(row, col_map)
-                            aff_links = config.get("_affiliate_networks", {})
-                            if comp in aff_links:
-                                c2.link_button(f"Book via {comp}", aff_links[comp])
+                            comp = get_booking_company(row, col_map); aff_links = config.get("_affiliate_networks", {})
+                            if comp in aff_links: c2.link_button(f"Book via {comp}", aff_links[comp])
 
         elif selected_page == "🎉 Fun Facts":
             st.markdown("### 🎉 Fun Facts")
@@ -501,37 +503,35 @@ def main():
                 comps['Booking Company'] = comps.apply(lambda r: get_booking_company(r, col_map), axis=1)
                 st.dataframe(comps[[col_map['Hotel'], 'Best_Price', 'Booking Company', 'Rate', 'Star', col_map['ArrivalDay']]].sort_values('Best_Price'), hide_index=True)
 
-        elif selected_page == "🧭 Traveler Guide":
-            st.title("🧭 Traveler Guide & Premium Tips")
+        elif selected_page == "🧭 Traveler Guide & Ads":
+            st.title("🧭 Traveler Guide & Premium Search")
+            tab_val, tab_rate, tab_price, tab_search = st.tabs(["💎 Best Value", "🌟 Top Rated", "💸 Lowest Price", "🔍 Feature Search"])
+            with tab_val: st.dataframe(df.sort_values('Value_Score', ascending=False).head(10)[[col_map['Hotel'], 'Best_Price', 'Rate', col_map['Location']]], hide_index=True, use_container_width=True)
+            with tab_rate: st.dataframe(df.sort_values('Rate', ascending=False).head(10)[[col_map['Hotel'], 'Best_Price', 'Rate', col_map['Location']]], hide_index=True, use_container_width=True)
+            with tab_price: st.dataframe(df.sort_values('Best_Price').head(10)[[col_map['Hotel'], 'Best_Price', 'Rate', col_map['Location']]], hide_index=True, use_container_width=True)
+            with tab_search:
+                search = st.text_input("Search (e.g. 'View', 'Pool', 'Breakfast')")
+                if search:
+                    res = df[df[col_map['Desc']].str.contains(search, case=False, na=False)]
+                    if not res.empty: st.dataframe(res[[col_map['Hotel'], 'Best_Price', 'Rate', col_map['Location'], col_map['Desc']]], hide_index=True, use_container_width=True)
             
             col1, col2 = st.columns([2, 1])
             with col1:
                 st.subheader("💡 Expert Travel Tips")
-                for tip in config.get("_travel_tips", []):
-                    st.info(tip)
-                
-                st.markdown("---")
-                st.subheader("🔍 Search for Specific Features")
-                search = st.text_input("Search (e.g. 'View', 'Pool', 'Breakfast')")
-                if search:
-                    res = df[df[col_map['Desc']].str.contains(search, case=False, na=False)]
-                    if not res.empty:
-                        st.dataframe(res[[col_map['Hotel'], 'Best_Price', 'Rate', col_map['Location'], col_map['Desc']]], hide_index=True)
-            
+                for tip in config.get("_travel_tips", []): st.info(tip)
             with col2:
                 st.subheader("📢 Featured Partners")
                 for ad in config.get("_paid_ads", []):
                     with st.container(border=True):
                         st.markdown(f"**[{ad['name']}]({ad['link']})**")
-                        st.write(ad['desc'])
-                        st.link_button("Contact/Visit", ad['link'], use_container_width=True)
-                
+                        st.write(ad['desc']); st.link_button("Contact/Visit", ad['link'], use_container_width=True)
+            
+            # HTML Widget Section
+            html_widgets = [w for w in config.get("_affiliate_widgets", []) if w.get('type') == 'html']
+            if html_widgets:
                 st.markdown("---")
-                st.subheader("🚗 Services")
-                for w in config.get("_affiliate_widgets", []):
-                    with st.container(border=True):
-                        st.markdown(f"**[{w['name']}]({w['link']})**")
-                        st.write(w['desc'])
+                st.subheader("🏨 Live Deals")
+                for hw in html_widgets: render_widget(hw)
 
         elif selected_page == "🎯 Custom Hotel Compare":
             st.markdown("### 🎯 Custom Comparison")
@@ -553,8 +553,7 @@ def main():
                                         "Stars": h_data.iloc[-1]['Star'], "Rate": h_data.iloc[-1]['Rate'], 
                                         "Location": h_data.iloc[-1][c_map['Location']]
                                     })
-                if comparison_data:
-                    st.dataframe(pd.DataFrame(comparison_data), hide_index=True, use_container_width=True)
+                if comparison_data: st.dataframe(pd.DataFrame(comparison_data), hide_index=True, use_container_width=True)
 
     if st.sidebar.button("Logout"):
         st.session_state.logged_in = False
