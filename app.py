@@ -226,7 +226,7 @@ def main():
         "trends": "📈 Market Intelligence", "rankings": "🏆 Rankings",
         "tracker": "🔥 Deal Radar", "fun_facts": "🎉 Fun Facts",
         "location": "📍 By Location", "competitor": "⚔️ Competitor Analysis",
-        "guide": "🧭 Traveler Guide ", "custom_compare": "🎯 Custom Hotel Compare",
+        "guide": "🧭 Traveler Guide & Ads ", "custom_compare": "🎯 Custom Hotel Compare",
         "partners": "🤝 Partners Marketplace", "admin": "⚙️ Admin Control Panel"
     }
     
