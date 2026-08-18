@@ -448,7 +448,7 @@ def main():
                         "Discount": f"-{row['Drop_Pct']:.0f}%",
                         "Arrival": row[col_map['ArrivalDay']],
                         "Company": comp,
-                        "Affiliate": "✅ Available" if comp in aff_links else "❌ N/A"
+                        "Available": "✅ Available" if comp in aff_links else "❌ N/A"
                     })
                 st.dataframe(pd.DataFrame(display_cols), hide_index=True, use_container_width=True)
 
