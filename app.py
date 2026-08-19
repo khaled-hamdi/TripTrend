@@ -82,15 +82,11 @@ CITIES_DATA = {
 def smart_find_file(city_name):
     target = CITIES_DATA[city_name]["file"]
     keywords = CITIES_DATA[city_name]["keywords"]
-    
     search_dirs = ["/home/ubuntu/upload/", "/home/ubuntu/", "./"]
     for d in search_dirs:
         if os.path.exists(d):
-            # Try exact name first
             exact_path = os.path.join(d, target)
             if os.path.exists(exact_path): return exact_path
-            
-            # Try keywords
             try:
                 files = [f for f in os.listdir(d) if f.endswith('.xlsx')]
                 for f in files:
@@ -131,7 +127,7 @@ def try_parse_dates(series):
 @st.cache_data
 def load_data(city_name):
     file_path = smart_find_file(city_name)
-    if not file_path: return None, None, f"Excel file for {city_name} not found. Please ensure '{CITIES_DATA[city_name]['file']}' is uploaded."
+    if not file_path: return None, None, f"Excel file for {city_name} not found."
     try:
         df = pd.read_excel(file_path)
         df.columns = df.columns.str.strip()
@@ -191,7 +187,9 @@ def render_affiliate_button(row, col_map, config, key_suffix=""):
     comp = get_booking_company(row, col_map)
     aff_links = config.get("_affiliate_networks", {})
     if comp in aff_links:
-        st.link_button(f"🔥 Book via {comp}", aff_links[comp], type="primary", use_container_width=True, key=f"aff_{key_suffix}_{row.name}_{np.random.randint(0,1000)}")
+        # Use a stable key based on row index and suffix
+        btn_key = f"aff_{key_suffix}_{row.name}"
+        st.link_button(f"🔥 Book via {comp}", aff_links[comp], type="primary", use_container_width=True, key=btn_key)
         return True
     return False
 
@@ -204,7 +202,7 @@ def render_ad_grid(widgets, cols=3):
             with st_cols[idx].container(border=True):
                 st.markdown(f"### {w.get('icon', '🔗')} {w['name']}")
                 st.write(w.get('desc', ''))
-                st.link_button("Explore Deal", w['link'], use_container_width=True)
+                st.link_button("Explore Deal", w['link'], use_container_width=True, key=f"grid_{w['name']}_{idx}")
 
 def generate_fun_facts(df, col_map, city, lang="English"):
     facts = []
@@ -227,7 +225,7 @@ def generate_fun_facts(df, col_map, city, lang="English"):
 # ======================================================================================
 # --- MAIN APP ---
 # ======================================================================================
-st.set_page_config(page_title="Hotel Analytics Pro V42", page_icon="🏨", layout="wide")
+st.set_page_config(page_title="Hotel Analytics Pro V43", page_icon="🏨", layout="wide")
 
 def main():
     config = load_config()
@@ -239,12 +237,12 @@ def main():
     if not st.session_state.logged_in and settings.get("public_access", False) and not st.session_state.admin_login_mode:
         st.session_state.logged_in, st.session_state.username = True, "Public_Visitor"
         st.session_state.role, st.session_state.is_public = "blogger", True
-        st.session_state.allowed_pages = ["comparison", "dashboard", "fun_facts", "guide", "trends", "tracker", "deals", "hot_deal"]
+        st.session_state.allowed_pages = ["comparison", "dashboard", "fun_facts", "guide", "trends", "tracker", "deals", "hot_deal", "partners", "location", "competitor", "custom_compare"]
         if 'current_page' not in st.session_state:
             st.session_state.current_page = settings.get("default_landing_page", "🌍 Country Comparison")
 
     if not st.session_state.logged_in:
-        st.title("🏨 Hotel Analytics Pro V42")
+        st.title("🏨 Hotel Analytics Pro V43")
         with st.container(border=True):
             u = st.text_input("Username")
             p = st.text_input("Password", type="password")
@@ -297,21 +295,10 @@ def main():
             st.session_state.logged_in, st.session_state.is_public, st.session_state.admin_login_mode = False, False, True
             st.rerun()
     
-    if st.session_state.role == "blogger": st.sidebar.info("✨ **Bloggers:** Request custom topics!")
-    if st.session_state.role == "company": st.sidebar.success("📢 **Advertise:** $5/month!")
-
     city = None
     if selected_page not in ["🌍 Country Comparison", "⚙️ Admin Control Panel", "🤝 Partners Marketplace", "🎁 Exclusive Deals", "⭐ Hotel of the Day"]:
         city = st.sidebar.selectbox("Select City", list(CITIES_DATA.keys()))
         data_mode = st.sidebar.radio("Data Filter", ["All Recorded Data", "Latest Snapshot Only"])
-        st.sidebar.markdown("---")
-        st.sidebar.subheader("💡 Essential Services")
-        widgets = config.get("_affiliate_widgets", [])
-        for w in widgets[:3]:
-            with st.sidebar.container(border=True):
-                st.markdown(f"**{w.get('icon','🔗')} {w['name']}**")
-                st.caption(w.get('desc',''))
-                st.link_button("Check Deal", w['link'], use_container_width=True, key=f"side_{w['name']}")
 
     # --- PAGES ---
     if selected_page == "🌍 Country Comparison":
@@ -355,21 +342,24 @@ def main():
                 st.write(f"📍 **Location:** {best_deal[col_map['Location']]}")
                 st.write(f"📝 **Description:** {best_deal[col_map['Desc']]}")
                 render_affiliate_button(best_deal, col_map, config, "hot_deal")
-            st.markdown("---")
-            st.subheader("🎒 Essential Add-ons for your trip")
-            render_ad_grid(config.get("_affiliate_widgets", [])[:3], cols=3)
 
     elif selected_page == "🎁 Exclusive Deals":
-        st.title("🎁 Partner Marketplace & Deals")
-        st.info("🔥 Hand-picked travel essentials with exclusive discounts just for you.")
+        st.title("🎁 Exclusive Traveler Deals")
+        st.info("🔥 Hand-picked travel essentials with exclusive discounts (Affiliates).")
         render_ad_grid(config.get("_affiliate_widgets", []), cols=3)
-        st.markdown("---")
-        st.subheader("📢 Featured Partners")
-        for ad in config.get("_paid_ads", []):
-            with st.container(border=True):
-                c1, c2 = st.columns([3, 1])
-                c1.markdown(f"### {ad['name']}"); c1.write(ad['desc'])
-                c2.link_button("Claim Offer", ad['link'], use_container_width=True)
+
+    elif selected_page == "🤝 Partners Marketplace":
+        st.title("🤝 Partners Marketplace")
+        st.info("📍 Specific sponsors and local partners in each city.")
+        spons_data = config.get("_sponsors", {})
+        for loc, sps in spons_data.items():
+            st.subheader(f"📍 {loc}")
+            cols = st.columns(3)
+            for idx, sp in enumerate(sps):
+                with cols[idx % 3].container(border=True):
+                    st.markdown(f"### {sp['name']}")
+                    st.write(sp['desc'])
+                    st.link_button("Visit Partner", sp['link'], key=f"partner_{loc}_{idx}")
 
     elif selected_page == "⚙️ Admin Control Panel":
         st.title("⚙️ Admin Control Panel")
@@ -414,16 +404,12 @@ def main():
                     st.markdown(f"**{row[col_map['Hotel']]}**")
                     st.write(f"💰 ${row['Best_Price']:.0f} | ⭐ {row['Rate_Val']}/10")
                     render_affiliate_button(row, col_map, config, f"dash_{idx}")
-            st.plotly_chart(px.histogram(df, x='Best_Price', title="Price Distribution in Market"), use_container_width=True)
 
         elif selected_page == "📈 Market Intelligence":
-            st.markdown("### 📈 Market Trends & Intelligence")
+            st.markdown("### 📈 Market Trends")
             day_stats = df.groupby(col_map['ArrivalDay'])['Best_Price'].agg(['mean', 'min', 'count']).reset_index()
             day_stats.columns = ['Arrival Day', 'Avg Price ($)', 'Min Price ($)', 'Offers']
-            day_stats = day_stats.sort_values('Avg Price ($)')
-            cheapest_day = day_stats.iloc[0]['Arrival Day']
-            st.success(f"💰 **Savings Tip:** Booking for **{cheapest_day}** arrival is currently the most cost-effective.")
-            st.dataframe(day_stats, hide_index=True, use_container_width=True)
+            st.dataframe(day_stats.sort_values('Avg Price ($)'), hide_index=True, use_container_width=True)
 
         elif selected_page == "🔥 Deal Radar":
             st.markdown("### 🔥 Price Drop Radar")
@@ -463,11 +449,42 @@ def main():
                         with c2: render_affiliate_button(row, col_map, config, "rank")
 
         elif selected_page == "🎉 Fun Facts":
-            st.markdown("### 🎉 Fun Facts & Viral Insights")
+            st.markdown("### 🎉 Fun Facts")
             lang = st.radio("Language", ["English", "Arabic"], horizontal=True)
             facts = generate_fun_facts(df, col_map, city, lang)
             cols = st.columns(2)
             for i, fact in enumerate(facts): cols[i % 2].success(fact)
+
+        elif selected_page == "📍 By Location":
+            st.markdown("### 📍 Location History")
+            loc_col = col_map['Location']
+            valid_locs = df[loc_col].dropna().unique()
+            if len(valid_locs) > 0:
+                loc = st.selectbox("Area", valid_locs)
+                loc_df = df[df[loc_col] == loc].copy()
+                loc_df['Booking Company'] = loc_df.apply(lambda r: get_booking_company(r, col_map), axis=1)
+                st.dataframe(loc_df[[col_map['Hotel'], 'Best_Price', 'Star', 'Rate_Val', 'Booking Company', col_map['BookingDate'], col_map['ArrivalDay']]].sort_values('Best_Price'), hide_index=True)
+            else: st.info("No location data found in this file.")
+
+        elif selected_page == "⚔️ Competitor Analysis":
+            st.markdown("### ⚔️ Competitor Intelligence")
+            h_col = col_map['Hotel']
+            hotel_list = df[h_col].dropna().unique()
+            if len(hotel_list) > 0:
+                hotel = st.selectbox("Hotel", hotel_list)
+                target = df[df[h_col] == hotel].iloc[0]
+                with st.container(border=True):
+                    st.subheader(f"🏨 {hotel} | ${target['Best_Price']:.0f}")
+                    st.write(f"⭐ {target['Star']} Stars | 📍 {target[col_map['Location']]}")
+                comps = df[df[h_col] != hotel].copy()
+                loc_col = col_map['Location']
+                if pd.notnull(target[loc_col]) and str(target[loc_col]) != "":
+                    comps = comps[comps[loc_col] == target[loc_col]]
+                else:
+                    comps = comps[comps['Star'] == target['Star']]
+                comps['Booking Company'] = comps.apply(lambda r: get_booking_company(r, col_map), axis=1)
+                st.dataframe(comps[[h_col, 'Best_Price', 'Booking Company', 'Rate_Val', 'Star', col_map['ArrivalDay']]].sort_values('Best_Price'), hide_index=True)
+            else: st.info("No hotel data found.")
 
         elif selected_page == "🧭 Traveler Guide & Ads":
             st.title("🧭 Traveler Guide")
@@ -489,11 +506,25 @@ def main():
                             c1, c2 = st.columns([3, 1])
                             c1.markdown(f"**{row[col_map['Hotel']]}** | ${row['Best_Price']:.0f}")
                             with c2: render_affiliate_button(row, col_map, config, "search")
-            st.markdown("---")
-            st.subheader("💡 Expert Travel Tips")
-            for tip in config.get("_travel_tips", []): st.info(tip)
-            st.subheader("🎒 Recommended Services")
-            render_ad_grid(config.get("_affiliate_widgets", []), cols=3)
+
+        elif selected_page == "🎯 Custom Hotel Compare":
+            st.markdown("### 🎯 Custom Comparison")
+            selected_cities = st.multiselect("1. Select Cities", list(CITIES_DATA.keys()))
+            if selected_cities:
+                comparison_data = []
+                for c in selected_cities:
+                    c_df, c_map, _ = load_data(c)
+                    if c_df is not None:
+                        h_col = c_map['Hotel']
+                        hotel_options = c_df[h_col].dropna().unique()
+                        sel_hotels = st.multiselect(f"2. Select Hotels in {c}", hotel_options, key=f"sel_{c}")
+                        if sel_hotels:
+                            sub = c_df[c_df[h_col].isin(sel_hotels)].copy()
+                            for name in sel_hotels:
+                                h_data = sub[sub[h_col] == name]
+                                if not h_data.empty:
+                                    comparison_data.append({"City": c, "Hotel": name, "Best Price ($)": h_data['Best_Price'].min(), "Stars": h_data.iloc[-1]['Star'], "Rate": h_data.iloc[-1]['Rate_Val'], "Location": h_data.iloc[-1][c_map['Location']]})
+                if comparison_data: st.dataframe(pd.DataFrame(comparison_data), hide_index=True, use_container_width=True)
 
     if st.sidebar.button("Logout"):
         st.session_state.logged_in, st.session_state.is_public, st.session_state.admin_login_mode = False, False, False
