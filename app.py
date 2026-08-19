@@ -19,13 +19,7 @@ def get_default_config():
         "_settings": {"public_access": False, "default_landing_page": "🌍 Country Comparison"},
         "_sponsors": {"General": []},
         "_stats": {"daily": {}, "total": {}},
-        "_affiliate_networks": {
-            "Booking.com": "https://www.booking.com/index.html?aid=YOUR_ID",
-            "Trip.com": "https://www.trip.com/?allianceid=YOUR_ID",
-            "Agoda": "https://www.agoda.com/?cid=YOUR_ID",
-            "Expedia": "https://www.expedia.com/?siteid=YOUR_ID",
-            "Hotels.com": "https://www.hotels.com/?pos=YOUR_ID"
-        },
+        "_affiliate_networks": {},
         "_affiliate_widgets": [],
         "_travel_tips": [],
         "_paid_ads": [],
@@ -40,8 +34,11 @@ def load_config():
                 defaults = get_default_config()
                 for key in defaults:
                     if key not in config: config[key] = defaults[key]
+                st.session_state['config_error'] = None
                 return config
-        except: return get_default_config()
+        except Exception as e:
+            st.session_state['config_error'] = f"JSON Error: {str(e)}"
+            return get_default_config()
     return get_default_config()
 
 def save_config(config):
@@ -187,7 +184,6 @@ def render_affiliate_button(row, col_map, config, key_suffix=""):
     comp = get_booking_company(row, col_map)
     aff_links = config.get("_affiliate_networks", {})
     if comp in aff_links:
-        # Use a stable key based on row index and suffix
         btn_key = f"aff_{key_suffix}_{row.name}"
         st.link_button(f"🔥 Book via {comp}", aff_links[comp], type="primary", use_container_width=True, key=btn_key)
         return True
@@ -202,7 +198,10 @@ def render_ad_grid(widgets, cols=3):
             with st_cols[idx].container(border=True):
                 st.markdown(f"### {w.get('icon', '🔗')} {w['name']}")
                 st.write(w.get('desc', ''))
-                st.link_button("Explore Deal", w['link'], use_container_width=True, key=f"grid_{w['name']}_{idx}")
+                if w.get('type') == 'html' and 'html_code' in w:
+                    components.html(w['html_code'], height=w.get('height', 200), scrolling=True)
+                else:
+                    st.link_button("Explore Deal", w['link'], use_container_width=True, key=f"grid_{w['name']}_{idx}_{np.random.randint(0,1000)}")
 
 def generate_fun_facts(df, col_map, city, lang="English"):
     facts = []
@@ -225,7 +224,7 @@ def generate_fun_facts(df, col_map, city, lang="English"):
 # ======================================================================================
 # --- MAIN APP ---
 # ======================================================================================
-st.set_page_config(page_title="Hotel Analytics Pro V43", page_icon="🏨", layout="wide")
+st.set_page_config(page_title="Hotel Analytics Pro V44", page_icon="🏨", layout="wide")
 
 def main():
     config = load_config()
@@ -242,7 +241,7 @@ def main():
             st.session_state.current_page = settings.get("default_landing_page", "🌍 Country Comparison")
 
     if not st.session_state.logged_in:
-        st.title("🏨 Hotel Analytics Pro V43")
+        st.title("🏨 Hotel Analytics Pro V44")
         with st.container(border=True):
             u = st.text_input("Username")
             p = st.text_input("Password", type="password")
@@ -299,6 +298,14 @@ def main():
     if selected_page not in ["🌍 Country Comparison", "⚙️ Admin Control Panel", "🤝 Partners Marketplace", "🎁 Exclusive Deals", "⭐ Hotel of the Day"]:
         city = st.sidebar.selectbox("Select City", list(CITIES_DATA.keys()))
         data_mode = st.sidebar.radio("Data Filter", ["All Recorded Data", "Latest Snapshot Only"])
+        st.sidebar.markdown("---")
+        st.sidebar.subheader("💡 Essential Services")
+        widgets = config.get("_affiliate_widgets", [])
+        for w in widgets[:3]:
+            with st.sidebar.container(border=True):
+                st.markdown(f"**{w.get('icon','🔗')} {w['name']}**")
+                st.caption(w.get('desc',''))
+                st.link_button("Check Deal", w['link'], use_container_width=True, key=f"side_{w['name']}")
 
     # --- PAGES ---
     if selected_page == "🌍 Country Comparison":
@@ -363,7 +370,7 @@ def main():
 
     elif selected_page == "⚙️ Admin Control Panel":
         st.title("⚙️ Admin Control Panel")
-        tab1, tab2, tab3 = st.tabs(["👤 Users", "🔧 Settings", "📈 Usage Stats"])
+        tab1, tab2, tab3, tab4 = st.tabs(["👤 Users", "🔧 Settings", "📈 Usage Stats", "🔍 Diagnostics"])
         with tab1:
             user_list = {k:v for k,v in config.items() if k not in ["_settings", "_sponsors", "_stats", "_affiliate_networks", "_affiliate_widgets", "_travel_tips", "_paid_ads"]}
             st.dataframe(pd.DataFrame.from_dict(user_list, orient='index').reset_index().rename(columns={'index':'User'}), hide_index=True)
@@ -381,6 +388,12 @@ def main():
                 totals = pd.DataFrame([{"Page": "🏁 TOTAL", "Today": df_summary["Today"].sum(), "Yesterday": df_summary["Yesterday"].sum(), "Total": df_summary["Total"].sum()}])
                 df_summary = pd.concat([df_summary, totals], ignore_index=True)
             st.dataframe(df_summary, hide_index=True, use_container_width=True)
+        with tab4:
+            st.subheader("Config Diagnostics")
+            if st.session_state.get('config_error'): st.error(st.session_state['config_error'])
+            else: st.success("✅ config_users.json loaded successfully.")
+            st.write(f"Affiliate Widgets Count: {len(config.get('_affiliate_widgets', []))}")
+            st.json(config.get('_affiliate_widgets', []))
 
     else:
         df, col_map, err = load_data(city)
@@ -506,6 +519,9 @@ def main():
                             c1, c2 = st.columns([3, 1])
                             c1.markdown(f"**{row[col_map['Hotel']]}** | ${row['Best_Price']:.0f}")
                             with c2: render_affiliate_button(row, col_map, config, "search")
+            st.markdown("---")
+            st.subheader("💡 Recommended Services")
+            render_ad_grid(config.get("_affiliate_widgets", []), cols=3)
 
         elif selected_page == "🎯 Custom Hotel Compare":
             st.markdown("### 🎯 Custom Comparison")
