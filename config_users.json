@@ -14,7 +14,7 @@
     "test_blogger": {
         "password": "test123",
         "role": "blogger",
-        "allowed_pages": ["dashboard", "fun_facts", "guide", "comparison", "trends", "tracker", "deals", "hot_deal"],
+        "allowed_pages": ["dashboard", "fun_facts", "guide", "comparison", "trends", "tracker", "deals", "hot_deal", "partners", "location", "competitor", "custom_compare"],
         "last_login": "N/A",
         "expiry_date": "2026-08-22",
         "status": "active"
@@ -28,44 +28,44 @@
     },
     "_affiliate_widgets": [
         {
-            "name": "📱 Yesim 18% of the SIM card price ",
+            "name": "📱 Yesim eSIM",
             "type": "link",
-            "desc": " Reliable eSIM provider for personal and business needsStable internet connection in 150+ countries worldwide",
+            "desc": "Reliable eSIM provider. Stable internet in 150+ countries. 18% off!",
             "link": "https://yesim.tpo.lu/fe8WNbJ1",
             "icon": "🌐"
         },
         {
             "name": "🚗 Kiwitaxi",
             "type": "link",
-            "desc": "Promo code: TPO5 Thهس code will give users a 5% discount on booking made on the Kiwitaxi ",
+            "desc": "Promo code: TPO5 for 5% discount on Kiwitaxi bookings.",
             "link": "https://kiwitaxi.tpo.lu/JOTFHwfH",
             "icon": "🚘"
         },
         {
             "name": "🚕 intui.travel",
             "type": "link",
-            "desc": " Promo code: VELVET  Discount: 5%   Intui.Travel transfer — is a platform for booking transfers in 175 countries from the best local transport companies.",
+            "desc": "Promo code: VELVET for 5% discount. Transfers in 175 countries.",
             "link": "https://intui.tpo.lu/gfQLxLhX",
             "icon": "🚖"
         },
         {
             "name": "🧳 Radical Storage",
             "type": "link",
-            "desc": "Affordable, Fixed Daily Rate: From €/$/£ 1.60 per bag, per day. No hidden fees and—best of all—no extra charges for larger or heavier suitcases.A massive network of over 10,000 "Angels" (storage points) located strategically near main train stations, airports, and popular city landmarks.Each piece of luggage is covered by a guarantee of up to €/$/£ 3,000.",
+            "desc": "Fixed rate luggage storage. 10,000+ points near stations.",
             "link": "https://radicalstorage.tpo.lu/eLjRTwwm",
             "icon": "🎒"
         },
         {
             "name": "🗺️ Local Guide",
             "type": "link",
-            "desc": "Private walking tours with local experts",
+            "desc": "Private walking tours with local experts.",
             "link": "https://example.com/guide",
             "icon": "🚶"
         },
         {
             "name": "✈️ aviasales",
             "type": "link",
-            "desc": "Aviasales is a trusted service for buying cheap flight tickets. No extra fees or markups! In the mobile application and on aviasales.com only the lowest possible rates from reliable agencies.",
+            "desc": "Trusted service for cheap flight tickets. No extra fees!",
             "link": "https://aviasales.tpo.lu/juOtHFX2",
             "icon": "🛫"
         }
