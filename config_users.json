@@ -7,24 +7,16 @@
         "password": "admin123",
         "role": "admin",
         "allowed_pages": ["all"],
-        "last_login": "2026-07-22 10:00:00",
+        "last_login": "N/A",
         "expiry_date": "2099-12-31",
         "status": "active"
     },
     "test_blogger": {
         "password": "test123",
         "role": "blogger",
-        "allowed_pages": ["dashboard", "fun_facts", "guide", "comparison", "trends", "tracker"],
+        "allowed_pages": ["dashboard", "fun_facts", "guide", "comparison", "trends", "tracker", "deals", "hot_deal"],
         "last_login": "N/A",
         "expiry_date": "2026-08-22",
-        "status": "active"
-    },
-    "test_company": {
-        "password": "comp123",
-        "role": "company",
-        "allowed_pages": ["dashboard", "trends", "tracker", "competitor"],
-        "last_login": "N/A",
-        "expiry_date": "2026-09-22",
         "status": "active"
     },
     "_affiliate_networks": {
@@ -36,46 +28,66 @@
     },
     "_affiliate_widgets": [
         {
-            "name": "🏨 Trip.com Deal Finder",
-            "type": "html",
-            "html_code": "<script async src=\"https://trpwdg.com/content?currency=USD&trs=560480&shmarker=205315&language=en&theme=1&powered_by=true&campaign_id=1&promo_id=1486\" charset=\"utf-8\"></script>",
-            "height": 400
+            "name": "📱 Travel eSIM",
+            "type": "link",
+            "desc": "Stay connected in 200+ countries from $4.50",
+            "link": "https://airalo.com/?ref=YOUR_ID",
+            "icon": "🌐"
         },
         {
             "name": "🚗 Car Rental",
             "type": "link",
-            "desc": "Best prices for car rentals globally",
-            "link": "https://rentalcars.com/?affiliate=YOUR_ID"
+            "desc": "Save up to 30% on worldwide car rentals",
+            "link": "https://rentalcars.com/?affiliate=YOUR_ID",
+            "icon": "🚘"
         },
         {
-            "name": "📱 Travel SIM",
+            "name": "🚕 Airport Taxi",
             "type": "link",
-            "desc": "Stay connected with eSIM for $5",
-            "link": "https://airalo.com/?ref=YOUR_ID"
+            "desc": "Private transfer from airport to your hotel",
+            "link": "https://example.com/taxi",
+            "icon": "🚖"
+        },
+        {
+            "name": "🧳 Luggage Storage",
+            "type": "link",
+            "desc": "Store your bags safely and explore the city",
+            "link": "https://example.com/luggage",
+            "icon": "🎒"
+        },
+        {
+            "name": "🗺️ Local Guide",
+            "type": "link",
+            "desc": "Private walking tours with local experts",
+            "link": "https://example.com/guide",
+            "icon": "🚶"
+        },
+        {
+            "name": "✈️ Cheap Flights",
+            "type": "link",
+            "desc": "Compare 1000+ airlines for the best price",
+            "link": "https://example.com/flights",
+            "icon": "🛫"
         }
     ],
     "_sponsors": {
         "Paris": [
-            {"name": "Paris Elite Tours", "desc": "Best private guides in Paris", "link": "https://example.com/paris"},
-            {"name": "Seine River Cruises", "desc": "Exclusive dinner cruises", "link": "https://example.com/seine"}
+            {"name": "Paris Elite Tours", "desc": "Best private guides in Paris", "link": "https://example.com/paris"}
         ],
         "Dubai": [
-            {"name": "Desert Safari Pro", "desc": "Premium desert adventures", "link": "https://example.com/dubai"},
-            {"name": "Burj View Dining", "desc": "Best views in the city", "link": "https://example.com/burj"}
+            {"name": "Desert Safari Pro", "desc": "Premium desert adventures", "link": "https://example.com/dubai"}
         ],
         "General": [
-            {"name": "Manus Travel Insurance", "desc": "Safe travels everywhere", "link": "https://help.manus.im"}
+            {"name": "Global Travel Insurance", "desc": "Full coverage for your trip", "link": "https://example.com/insurance"}
         ]
     },
     "_travel_tips": [
-        "💡 Always book 2-3 weeks in advance for European cities.",
-        "💡 Use a VPN to check prices from different regions.",
-        "💡 Tuesdays and Wednesdays are usually the cheapest flight days.",
-        "💡 Local SIM cards are 70% cheaper than roaming."
+        "💡 **Pro Tip:** Booking 21 days in advance saves you 15% on average.",
+        "💡 **Money Saver:** Use public transport in Paris to save $50 per day.",
+        "💡 **Smart Booking:** Check the 'Deal Radar' for sudden price drops."
     ],
     "_paid_ads": [
-        {"name": "Travel With Ahmed", "desc": "Follow for daily luxury deals in Dubai", "link": "https://facebook.com/ahmed_travel"},
-        {"name": "Sky High Agency", "desc": "Special 20% discount on group tours", "link": "https://agency.com"}
+        {"name": "Travel With Ahmed", "desc": "Follow for daily luxury deals in Dubai", "link": "https://facebook.com/ahmed_travel"}
     ],
     "_stats": {
         "daily": {},
