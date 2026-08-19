@@ -21,7 +21,7 @@
     },
     "_affiliate_networks": {
         "Booking.com": "https://www.booking.com/index.html?aid=YOUR_ID",
-        "Trip.com": "https://www.trip.com/?allianceid=YOUR_ID",
+        "Trip.com": "https://trip.tpo.lu/U5kH8bZK",
         "Agoda": "https://www.agoda.com/?cid=YOUR_ID",
         "Expedia": "https://www.expedia.com/?siteid=YOUR_ID",
         "Hotels.com": "https://www.hotels.com/?pos=YOUR_ID"
@@ -56,10 +56,10 @@
             "icon": "🎒"
         },
         {
-            "name": "🗺️ Local Guide",
+            "name": "🗺️ GetYourGuide",
             "type": "link",
-            "desc": "Private walking tours with local experts.",
-            "link": "https://example.com/guide",
+            "desc": "GetYourGuide is a booking platform that helps travelers find incredible travel experiences wherever they’re headed. These experiences include skip-the-line tickets to the world’s most iconic attractions, walking tours by top local experts, immersive food and beverage tours, cooking and craft classes, bucket list experiences, and niche offerings you won’t find anywhere else..",
+            "link": "https://www.getyourguide.com",
             "icon": "🚶"
         },
         {
