@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 import os
 import re
 import json
+import random
 
 # ======================================================================================
 # --- USER MANAGEMENT & PERSISTENCE ---
@@ -184,7 +185,7 @@ def render_affiliate_button(row, col_map, config, key_suffix=""):
     comp = get_booking_company(row, col_map)
     aff_links = config.get("_affiliate_networks", {})
     if comp in aff_links:
-        btn_key = f"aff_{key_suffix}_{row.name}"
+        btn_key = f"aff_{key_suffix}_{row.name}_{random.randint(0, 9999)}"
         st.link_button(f"🔥 Book via {comp}", aff_links[comp], type="primary", use_container_width=True, key=btn_key)
         return True
     return False
@@ -201,7 +202,17 @@ def render_ad_grid(widgets, cols=3):
                 if w.get('type') == 'html' and 'html_code' in w:
                     components.html(w['html_code'], height=w.get('height', 200), scrolling=True)
                 else:
-                    st.link_button("Explore Deal", w['link'], use_container_width=True, key=f"grid_{w['name']}_{idx}_{np.random.randint(0,1000)}")
+                    st.link_button("Explore Deal", w['link'], use_container_width=True, key=f"grid_{w['name']}_{idx}_{random.randint(0, 9999)}")
+
+def render_vip_banner(config):
+    paid_ads = config.get("_paid_ads", [])
+    if paid_ads:
+        ad = random.choice(paid_ads)
+        with st.container(border=True):
+            c1, c2 = st.columns([4, 1])
+            c1.markdown(f"### 🚀 VIP Deal: {ad['name']}")
+            c1.write(ad['desc'])
+            c2.link_button("Claim Now", ad['link'], type="primary", use_container_width=True, key=f"vip_{random.randint(0, 9999)}")
 
 def generate_fun_facts(df, col_map, city, lang="English"):
     facts = []
@@ -224,7 +235,7 @@ def generate_fun_facts(df, col_map, city, lang="English"):
 # ======================================================================================
 # --- MAIN APP ---
 # ======================================================================================
-st.set_page_config(page_title="Hotel Analytics Pro V44", page_icon="🏨", layout="wide")
+st.set_page_config(page_title="Hotel Analytics Pro V45", page_icon="🏨", layout="wide")
 
 def main():
     config = load_config()
@@ -241,7 +252,7 @@ def main():
             st.session_state.current_page = settings.get("default_landing_page", "🌍 Country Comparison")
 
     if not st.session_state.logged_in:
-        st.title("🏨 Hotel Analytics Pro V44")
+        st.title("🏨 Hotel Analytics Pro V45")
         with st.container(border=True):
             u = st.text_input("Username")
             p = st.text_input("Password", type="password")
@@ -294,6 +305,9 @@ def main():
             st.session_state.logged_in, st.session_state.is_public, st.session_state.admin_login_mode = False, False, True
             st.rerun()
     
+    # VIP Banner at the top of all pages
+    render_vip_banner(config)
+
     city = None
     if selected_page not in ["🌍 Country Comparison", "⚙️ Admin Control Panel", "🤝 Partners Marketplace", "🎁 Exclusive Deals", "⭐ Hotel of the Day"]:
         city = st.sidebar.selectbox("Select City", list(CITIES_DATA.keys()))
@@ -392,7 +406,6 @@ def main():
             st.subheader("Config Diagnostics")
             if st.session_state.get('config_error'): st.error(st.session_state['config_error'])
             else: st.success("✅ config_users.json loaded successfully.")
-            st.write(f"Affiliate Widgets Count: {len(config.get('_affiliate_widgets', []))}")
             st.json(config.get('_affiliate_widgets', []))
 
     else:
@@ -408,6 +421,14 @@ def main():
             c1.metric("Avg Price", f"${df['Best_Price'].mean():.0f}")
             c2.metric("Unique Hotels", df[col_map['Hotel']].nunique())
             c3.metric("Top Quality", f"{df['Rate_Val'].max():.1f}")
+            
+            # Contextual Sponsors on Dashboard
+            city_sponsors = config.get("_sponsors", {}).get(city, [])
+            if city_sponsors:
+                st.markdown("---")
+                st.subheader(f"🤝 Recommended Partners in {city}")
+                render_ad_grid(city_sponsors, cols=3)
+            
             st.markdown("---")
             st.subheader("🔥 Top Deals Right Now")
             top_3 = df.sort_values('Value_Score', ascending=False).head(3)
@@ -477,7 +498,7 @@ def main():
                 loc_df = df[df[loc_col] == loc].copy()
                 loc_df['Booking Company'] = loc_df.apply(lambda r: get_booking_company(r, col_map), axis=1)
                 st.dataframe(loc_df[[col_map['Hotel'], 'Best_Price', 'Star', 'Rate_Val', 'Booking Company', col_map['BookingDate'], col_map['ArrivalDay']]].sort_values('Best_Price'), hide_index=True)
-            else: st.info("No location data found in this file.")
+            else: st.info("No location data found.")
 
         elif selected_page == "⚔️ Competitor Analysis":
             st.markdown("### ⚔️ Competitor Intelligence")
@@ -497,7 +518,6 @@ def main():
                     comps = comps[comps['Star'] == target['Star']]
                 comps['Booking Company'] = comps.apply(lambda r: get_booking_company(r, col_map), axis=1)
                 st.dataframe(comps[[h_col, 'Best_Price', 'Booking Company', 'Rate_Val', 'Star', col_map['ArrivalDay']]].sort_values('Best_Price'), hide_index=True)
-            else: st.info("No hotel data found.")
 
         elif selected_page == "🧭 Traveler Guide & Ads":
             st.title("🧭 Traveler Guide")
