@@ -92,9 +92,9 @@
         "💡 **Smart Booking:** Check the 'Deal Radar' for sudden price drops."
     ],
     "_paid_ads": [
-        {"name": "📸 Travel With Ahmed", "desc": "Follow for daily luxury deals in Dubai", "link": "https://facebook.com/ahmed_travel"},
-        {"name": "🏨 Hotel Hunter Sara", "desc": "Expert reviews of budget hotels in Europe", "link": "https://instagram.com/sara_hotels"},
-        {"name": "💼 Business Traveler Pro", "desc": "Best lounge access and flight hacks", "link": "https://twitter.com/biz_travel"}
+        {"name": "📸 Daily Tourism Data", "desc": "Tourism Info", "link": "https://x.com/khaldsalam"},
+        {"name": "🏨 Travel Analysis", "desc": "Expert reviews of budget hotels in Europe", "link": "https://www.facebook.com/khmh1"},
+        {"name": "💼 Trip Trends", "desc": "Best Travelling Info ", "link": "https://x.com/TripTrends_"}
     ],
     "_stats": {
         "daily": {},
