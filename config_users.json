@@ -21,7 +21,7 @@
     },
     "_affiliate_networks": {
         "Booking.com": "https://www.booking.com/index.html?aid=YOUR_ID",
-        "Trip.com": "https://trip.tpo.lu/U5kH8bZK",
+        "Trip.com": "https://www.trip.com/?allianceid=YOUR_ID",
         "Agoda": "https://www.agoda.com/?cid=YOUR_ID",
         "Expedia": "https://www.expedia.com/?siteid=YOUR_ID",
         "Hotels.com": "https://www.hotels.com/?pos=YOUR_ID"
@@ -56,10 +56,10 @@
             "icon": "🎒"
         },
         {
-            "name": "🗺️ GetYourGuide",
+            "name": "🗺️ Local Guide",
             "type": "link",
-            "desc": "GetYourGuide is a booking platform that helps travelers find incredible travel experiences wherever they’re headed. These experiences include skip-the-line tickets to the world’s most iconic attractions, walking tours by top local experts, immersive food and beverage tours, cooking and craft classes, bucket list experiences, and niche offerings you won’t find anywhere else..",
-            "link": "https://www.getyourguide.com",
+            "desc": "Private walking tours with local experts.",
+            "link": "https://example.com/guide",
             "icon": "🚶"
         },
         {
@@ -72,13 +72,18 @@
     ],
     "_sponsors": {
         "Paris": [
-            {"name": "Paris Elite Tours", "desc": "Best private guides in Paris", "link": "https://example.com/paris"}
+            {"name": "🗼 Paris Elite Tours", "desc": "Best private guides in Paris", "link": "https://example.com/paris"},
+            {"name": "🍷 Seine Dinner Cruise", "desc": "Romantic dinner on the river", "link": "https://example.com/seine"}
         ],
         "Dubai": [
-            {"name": "Desert Safari Pro", "desc": "Premium desert adventures", "link": "https://example.com/dubai"}
+            {"name": "🏙️ Desert Safari Pro", "desc": "Premium desert adventures", "link": "https://example.com/dubai"},
+            {"name": "🚁 Burj Khalifa View", "desc": "Private helicopter tours", "link": "https://example.com/burj"}
+        ],
+        "Istanbul": [
+            {"name": "🕌 Bosphorus Tours", "desc": "Magical sunset cruises", "link": "https://example.com/istanbul"}
         ],
         "General": [
-            {"name": "Global Travel Insurance", "desc": "Full coverage for your trip", "link": "https://example.com/insurance"}
+            {"name": "🛡️ Global Travel Insurance", "desc": "Full coverage for your trip", "link": "https://example.com/insurance"}
         ]
     },
     "_travel_tips": [
@@ -87,7 +92,9 @@
         "💡 **Smart Booking:** Check the 'Deal Radar' for sudden price drops."
     ],
     "_paid_ads": [
-        {"name": "Travel With Ahmed", "desc": "Follow for daily luxury deals in Dubai", "link": "https://facebook.com/ahmed_travel"}
+        {"name": "📸 Travel With Ahmed", "desc": "Follow for daily luxury deals in Dubai", "link": "https://facebook.com/ahmed_travel"},
+        {"name": "🏨 Hotel Hunter Sara", "desc": "Expert reviews of budget hotels in Europe", "link": "https://instagram.com/sara_hotels"},
+        {"name": "💼 Business Traveler Pro", "desc": "Best lounge access and flight hacks", "link": "https://twitter.com/biz_travel"}
     ],
     "_stats": {
         "daily": {},
