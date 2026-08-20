@@ -252,7 +252,7 @@ def main():
             st.session_state.current_page = settings.get("default_landing_page", "🌍 Country Comparison")
 
     if not st.session_state.logged_in:
-        st.title("🏨 Hotel Analytics Pro V45")
+        st.title("🏨 Hotel Analytics")
         with st.container(border=True):
             u = st.text_input("Username")
             p = st.text_input("Password", type="password")
