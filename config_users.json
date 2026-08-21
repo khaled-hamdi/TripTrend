@@ -1,7 +1,8 @@
 {
     "_settings": {
         "public_access": false,
-        "default_landing_page": "🌍 Country Comparison"
+        "default_landing_page": "🌍 Country Comparison",
+        "download_code": "premium2026"
     },
     "admin": {
         "password": "admin123",
@@ -82,6 +83,9 @@
         "Istanbul": [
             {"name": "🕌 Bosphorus Tours", "desc": "Magical sunset cruises", "link": "https://example.com/istanbul"}
         ],
+        "London": [
+            {"name": "🎡 London Eye FastPass", "desc": "Skip the line at London Eye", "link": "https://example.com/london"}
+        ],
         "General": [
             {"name": "🛡️ Global Travel Insurance", "desc": "Full coverage for your trip", "link": "https://example.com/insurance"}
         ]
@@ -92,9 +96,9 @@
         "💡 **Smart Booking:** Check the 'Deal Radar' for sudden price drops."
     ],
     "_paid_ads": [
-        {"name": "📸 Daily Tourism Data", "desc": "Tourism Info", "link": "https://x.com/khaldsalam"},
-        {"name": "🏨 Travel Analysis", "desc": "Expert reviews of budget hotels in Europe", "link": "https://www.facebook.com/khmh1"},
-        {"name": "💼 Trip Trends", "desc": "Best Travelling Info ", "link": "https://x.com/TripTrends_"}
+        {"name": "📸 Travel With Ahmed", "desc": "Follow for daily luxury deals in Dubai", "link": "https://facebook.com/ahmed_travel"},
+        {"name": "🏨 Hotel Hunter Sara", "desc": "Expert reviews of budget hotels in Europe", "link": "https://instagram.com/sara_hotels"},
+        {"name": "💼 Business Traveler Pro", "desc": "Best lounge access and flight hacks", "link": "https://twitter.com/biz_travel"}
     ],
     "_stats": {
         "daily": {},
