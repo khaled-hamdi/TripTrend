@@ -38,18 +38,6 @@ CITIES = {
         "country": "UAE",
         "description": "Luxury Desert Destination - Premium Hotels"
     },
-    "Istanbul": {
-        "file": "Istanbul.xlsx",
-        "emoji": "🕌",
-        "country": "Turkey",
-        "description": "Bridge Between Continents - Historic & Modern Hotels"
-    },
-    "Cairo": {
-        "file": "Cairo.xlsx",
-        "emoji": "🏛️",
-        "country": "Egypt",
-        "description": "Ancient Wonders - Cultural Hub Hotels"
-    },
     "New York": {
         "file": "New York.xlsx",
         "emoji": "🗽",
