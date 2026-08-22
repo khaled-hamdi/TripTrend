@@ -56,8 +56,8 @@ CITIES = {
         "country": "UK",
         "description": "Historic Capital - Elegant Hotels"
     },
-    "Barcelona": {
-        "file": "paris 10-7.xlsx",
+    "Switherland": {
+        "file": "Switherland.xlsx",
         "emoji": "🏖️",
         "country": "Spain",
         "description": "Mediterranean Beauty - Beach & City Hotels"
