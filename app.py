@@ -75,7 +75,7 @@ CITIES_DATA = {
     "Dubai": {"file": "Dubai.xlsx", "emoji": "🏙️", "keywords": ["dubai"]},
     "London": {"file": "London.xlsx", "emoji": "🎡", "keywords": ["london"]},
     "NewYork": {"file": "NewYork.xlsx", "emoji": "🗽", "keywords": ["newyork", "new york"]},
-    "Switherland": {"file": "Switherland.xlsx", "emoji": "🏔️", "keywords": ["switherland", "swiss"]}
+    "Switherland": {"file": "Switzerland.xlsx", "emoji": "🏔️", "keywords": ["Switzerland", "swiss"]}
 }
 
 def smart_find_file(city_name):
