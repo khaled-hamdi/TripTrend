@@ -87,7 +87,7 @@
             {"name": "🎡 London Eye FastPass", "desc": "Skip the line at London Eye", "link": "https://example.com/london"}
         ],
         "General": [
-            {"name": "🛡️ Daily Tourism Data", "desc": "", "link":""}
+            {"name": "🛡️ Global Travel Insurance", "desc": "Full coverage for your trip", "link": "https://example.com/insurance"}
         ]
     },
     "_travel_tips": [
@@ -96,9 +96,10 @@
         "💡 **Smart Booking:** Check the 'Deal Radar' for sudden price drops."
     ],
     "_paid_ads": [
-        {"name": "📸 Travelling info ", "desc": "Follow for daily luxury deals ", "link": "https://www.facebook.com/khmh1"},
-        {"name": "🛡️ Daily Tourism Data", "desc": "Statistics , Data Journalist , Content Creator  and analysis data", "link": "https://x.com/khaldsalam"}
-        {"name": "💼 Affordable eSIM data for international travel", "desc": "", "link": ""}],
+        {"name": "📸 Travel With Ahmed", "desc": "Follow for daily luxury deals in Dubai", "link": "https://facebook.com/ahmed_travel"},
+        {"name": "🏨 Hotel Hunter Sara", "desc": "Expert reviews of budget hotels in Europe", "link": "https://instagram.com/sara_hotels"},
+        {"name": "💼 Business Traveler Pro", "desc": "Best lounge access and flight hacks", "link": "https://twitter.com/biz_travel"}
+    ],
     "_stats": {
         "daily": {},
         "total": {}
