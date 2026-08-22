@@ -87,7 +87,7 @@
             {"name": "🎡 London Eye FastPass", "desc": "Skip the line at London Eye", "link": "https://example.com/london"}
         ],
         "General": [
-            {"name": "🛡️ Daily Tourism Data", "desc": "Statistics , Data Journalist , Content Creator  and analysis data", "link": "https://x.com/khaldsalam"}
+            {"name": "🛡️ Daily Tourism Data", "desc": "", "link":""}
         ]
     },
     "_travel_tips": [
@@ -98,7 +98,7 @@
     "_paid_ads": [
         {"name": "📸 Travelling info ", "desc": "Follow for daily luxury deals ", "link": "https://www.facebook.com/khmh1"},
         {"name": "🛡️ Daily Tourism Data", "desc": "Statistics , Data Journalist , Content Creator  and analysis data", "link": "https://x.com/khaldsalam"}
-        {"name": "💼 Affordable eSIM data for international travel", "desc": "Global Coverage: Use mobile data in 200+ countries and regions without switching SIM cards.Affordable Pricing: Low-cost plans starting at $1.99, with flexible options for different regions.", "link": "https://saily.tpo.lu/Q7wyQfwR"}],
+        {"name": "💼 Affordable eSIM data for international travel", "desc": "", "link": ""}],
     "_stats": {
         "daily": {},
         "total": {}
