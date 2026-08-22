@@ -126,7 +126,7 @@ def try_parse_dates(series):
 @st.cache_data
 def load_data(city_name, data_mode="All Data"):
     file_path = smart_find_file(city_name)
-    if not file_path: return None, None, f"Excel file for {city_name} not found."
+    if not file_path: return None, None, f"Data of {city_name} not found."
     try:
         df = pd.read_excel(file_path)
         df.columns = df.columns.str.strip()
