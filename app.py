@@ -10,6 +10,10 @@ import re
 import json
 import random
 import io
+from triptrend_data_engine import normalize_city
+from google_sheets_adapter import read_tab
+from triptrend_sheets_config import load_config_from_sheets
+from triptrend_import_to_sheets import prepare_import, apply_import
 
 # ======================================================================================
 # --- USER MANAGEMENT & PERSISTENCE ---
@@ -30,6 +34,13 @@ def get_default_config():
     }
 
 def load_config():
+    if os.getenv('TRIPTREND_SPREADSHEET_ID') and os.getenv('GOOGLE_SERVICE_ACCOUNT_JSON'):
+        try:
+            config = load_config_from_sheets(get_default_config())
+            st.session_state['config_error'] = None
+            return config
+        except Exception as e:
+            st.session_state['config_error'] = f'Google Sheets config error: {e}'
     if os.path.exists(USERS_FILE):
         try:
             with open(USERS_FILE, 'r', encoding='utf-8') as f:
@@ -73,9 +84,11 @@ def update_last_login(username):
 CITIES_DATA = {
     "Paris": {"file": "Paris.xlsx", "emoji": "🗼", "keywords": ["paris"]},
     "Dubai": {"file": "Dubai.xlsx", "emoji": "🏙️", "keywords": ["dubai"]},
+    "Istanbul": {"file": "Istanbul.xlsx", "emoji": "🕌", "keywords": ["istanbul"]},
+    "Cairo": {"file": "Cairo.xlsx", "emoji": "🏛️", "keywords": ["cairo"]},
     "London": {"file": "London.xlsx", "emoji": "🎡", "keywords": ["london"]},
     "NewYork": {"file": "NewYork.xlsx", "emoji": "🗽", "keywords": ["newyork", "new york"]},
-    "Switherland": {"file": "Switherland.xlsx", "emoji": "🏔️", "keywords": ["Switherland", "swiss"]}
+    "Switzerland": {"file": "Switzerland.xlsx", "emoji": "🏔️", "keywords": ["switzerland", "switherland", "swiss"]}
 }
 
 def smart_find_file(city_name):
@@ -124,9 +137,55 @@ def try_parse_dates(series):
     return parsed
 
 @st.cache_data
+def load_data_from_google_sheets(city_name, data_mode="All Data"):
+    rows = read_tab('Price_History')
+    if not rows or len(rows) < 2:
+        return None, None, 'Price_History is empty.'
+    raw = pd.DataFrame(rows[1:], columns=rows[0])
+    raw = raw.loc[:, ~raw.columns.duplicated()].copy()
+    if 'City' not in raw.columns:
+        return None, None, 'Price_History is missing City.'
+    raw = raw[raw['City'].map(normalize_city) == normalize_city(city_name)].copy()
+    if raw.empty:
+        return None, None, f'No records found for {city_name} in Price_History.'
+    raw['Hotel_Name'] = raw.get('Source_Hotel_Name', '')
+    raw['Rate'] = raw.get('Rate', np.nan)
+    raw['Star'] = raw.get('Stars', np.nan)
+    raw['Price1'] = raw.get('Price1', np.nan)
+    raw['price2'] = raw.get('Price2', np.nan)
+    raw['price3'] = raw.get('Price3', np.nan)
+    raw['Place1'] = raw.get('Company1', '')
+    raw['place2'] = raw.get('Company2', '')
+    raw['place3'] = raw.get('Company3', '')
+    raw['Rating'] = raw.get('Rating_Label', '')
+    raw['location'] = raw.get('Location', '')
+    raw['Desc'] = raw.get('Description', '')
+    raw['Desc2'] = ''
+    raw['Distance From places'] = ''
+    raw['booking_dt'] = pd.to_datetime(raw.get('Booking_Date'), errors='coerce')
+    raw['arrival_dt'] = pd.to_datetime(raw.get('Arrival_Date'), errors='coerce')
+    raw['day of arrival'] = raw['arrival_dt'].dt.day_name()
+    raw['date of creat booking'] = raw['booking_dt']
+    raw['start book'] = raw['booking_dt']
+    raw['day of book'] = raw['booking_dt'].dt.day_name()
+    raw['days_before'] = (raw['arrival_dt'] - raw['booking_dt']).dt.days
+    raw['Best_Price'] = pd.to_numeric(raw.get('Best_Price'), errors='coerce').where(lambda s: s > 0)
+    raw['Rate_Val'] = pd.to_numeric(raw['Rate'], errors='coerce').fillna(0)
+    raw['Value_Score'] = raw['Rate_Val'] / raw['Best_Price'].replace(0, np.nan)
+    col_map = {'Hotel':'Hotel_Name','Rate':'Rate','Star':'Star','P1':'Price1','P2':'price2','P3':'price3','Place1':'Place1','Place2':'place2','Place3':'place3','ArrivalDay':'day of arrival','BookingDate':'date of creat booking','Desc':'Desc','Location':'location','Dist':'Distance From places'}
+    if data_mode == 'Latest Snapshot Only' and 'Import_Date' in raw.columns:
+        latest = raw['Import_Date'].astype(str).max()
+        raw = raw[raw['Import_Date'].astype(str) == latest].copy()
+    return raw, col_map, None
+
 def load_data(city_name, data_mode="All Data"):
+    if os.getenv('TRIPTREND_SPREADSHEET_ID') and os.getenv('GOOGLE_SERVICE_ACCOUNT_JSON'):
+        try:
+            return load_data_from_google_sheets(city_name, data_mode)
+        except Exception as e:
+            return None, None, f'Google Sheets read error: {e}'
     file_path = smart_find_file(city_name)
-    if not file_path: return None, None, f"Data of {city_name} not found."
+    if not file_path: return None, None, f"Excel file for {city_name} not found."
     try:
         df = pd.read_excel(file_path)
         df.columns = df.columns.str.strip()
@@ -417,7 +476,7 @@ def main():
 
     elif selected_page == "⚙️ Admin Control Panel":
         st.title(f"⚙️ Admin Panel {APP_VERSION}")
-        tab1, tab2, tab3, tab4 = st.tabs(["👤 Users", "🔧 Settings", "📈 Usage Stats", "🔍 Diagnostics"])
+        tab1, tab2, tab3, tab4, tab5 = st.tabs(["👤 Users", "🔧 Settings", "📈 Usage Stats", "🔍 Diagnostics", "📥 Daily Import"])
         with tab1:
             user_list = {k:v for k,v in config.items() if k not in ["_settings", "_sponsors", "_stats", "_affiliate_networks", "_affiliate_widgets", "_travel_tips", "_paid_ads"]}
             st.dataframe(pd.DataFrame.from_dict(user_list, orient='index').reset_index().rename(columns={'index':'User'}), hide_index=True)
@@ -440,6 +499,28 @@ def main():
             st.subheader("Config Backup")
             json_str = json.dumps(config, indent=4, ensure_ascii=False)
             st.download_button("📥 Backup config_users.json", json_str, "config_users_backup.json", "application/json")
+        with tab5:
+            st.subheader("📥 Import Daily Excel Workbook")
+            st.caption("Upload one workbook containing one Tab per city. The preview is deduplicated before anything is written to Google Sheets.")
+            uploaded = st.file_uploader("Choose daily workbook", type=['xlsx'], key='daily_import_file')
+            if uploaded is not None:
+                import tempfile
+                temp_path = tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx')
+                temp_path.write(uploaded.getvalue())
+                temp_path.close()
+                try:
+                    prepared = prepare_import(temp_path.name)
+                    st.dataframe(prepared['summary'], hide_index=True, use_container_width=True)
+                    st.write({
+                        'New price records': len(prepared['history_rows']),
+                        'New hotels': len(prepared['master_rows']),
+                        'New aliases': len(prepared['alias_rows']),
+                    })
+                    if st.button('✅ Approve and write to Google Sheets', type='primary', key='approve_daily_import'):
+                        result = apply_import(prepared)
+                        st.success(f"Import completed: {result['history_added']} price records, {result['master_added']} hotels, {result['aliases_added']} aliases.")
+                except Exception as e:
+                    st.error(f"Import preview failed: {e}")
 
     else:
         df, col_map, err = load_data(city, data_mode)
