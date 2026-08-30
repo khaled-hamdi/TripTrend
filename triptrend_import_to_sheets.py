@@ -66,13 +66,20 @@ def prepare_import(path: str | Path, import_id: str | None = None, import_date: 
     return {'records': records, 'summary': summary, 'history_rows': history_rows, 'master_rows': master_rows, 'alias_rows': alias_rows, 'log_rows': log_rows}
 
 
+def _append_in_batches(tab_name, rows, batch_size=500):
+    rows = list(rows)
+    for start in range(0, len(rows), batch_size):
+        append_rows(tab_name, rows[start:start + batch_size])
+
+
 def apply_import(prepared):
+    # Keep each API request small enough for reliable Streamlit Cloud execution.
     if prepared['history_rows']:
-        append_rows('Price_History', prepared['history_rows'])
+        _append_in_batches('Price_History', prepared['history_rows'])
     if prepared['master_rows']:
-        append_rows('Hotels_Master', prepared['master_rows'])
+        _append_in_batches('Hotels_Master', prepared['master_rows'])
     if prepared['alias_rows']:
-        append_rows('Hotel_Aliases', prepared['alias_rows'])
+        _append_in_batches('Hotel_Aliases', prepared['alias_rows'])
     if prepared['log_rows']:
-        append_rows('Import_Log', prepared['log_rows'])
+        _append_in_batches('Import_Log', prepared['log_rows'])
     return {'history_added': len(prepared['history_rows']), 'master_added': len(prepared['master_rows']), 'aliases_added': len(prepared['alias_rows']), 'log_rows': len(prepared['log_rows'])}
