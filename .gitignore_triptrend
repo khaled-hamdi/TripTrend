@@ -1,0 +1,16 @@
+# Secrets and local configuration
+.streamlit/secrets.toml
+*.json
+!package.json
+.env
+.env.*
+
+# Local uploads and generated workbooks
+TripTrend_Daily_*.xlsx
+TripTrend_Staging_*.xlsx
+*_import_test*.txt
+*_validation.txt
+__pycache__/
+
+# Local app state
+config_users.json
