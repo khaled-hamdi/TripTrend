@@ -146,7 +146,7 @@ def try_parse_dates(series):
         except: pass
     return parsed
 
-@st.cache_data
+@st.cache_data(ttl=120, show_spinner=False)
 def load_data_from_google_sheets(city_name, data_mode="All Data"):
     rows = read_tab('Price_History')
     if not rows or len(rows) < 2:
@@ -180,7 +180,9 @@ def load_data_from_google_sheets(city_name, data_mode="All Data"):
     raw['day of book'] = raw['booking_dt'].dt.day_name()
     raw['days_before'] = (raw['arrival_dt'] - raw['booking_dt']).dt.days
     raw['Best_Price'] = pd.to_numeric(raw.get('Best_Price'), errors='coerce').where(lambda s: s > 0)
-    raw['Rate_Val'] = pd.to_numeric(raw['Rate'], errors='coerce').fillna(0)
+    raw['Rate'] = pd.to_numeric(raw['Rate'], errors='coerce')
+    raw['Star'] = pd.to_numeric(raw['Star'], errors='coerce')
+    raw['Rate_Val'] = raw['Rate'].fillna(0)
     raw['Value_Score'] = raw['Rate_Val'] / raw['Best_Price'].replace(0, np.nan)
     col_map = {'Hotel':'Hotel_Name','Rate':'Rate','Star':'Star','P1':'Price1','P2':'price2','P3':'price3','Place1':'Place1','Place2':'place2','Place3':'place3','ArrivalDay':'day of arrival','BookingDate':'date of creat booking','Desc':'Desc','Location':'location','Dist':'Distance From places'}
     if data_mode == 'Latest Snapshot Only' and 'Import_Date' in raw.columns:
@@ -310,7 +312,22 @@ def generate_fun_facts(df, col_map, city, lang="English"):
     add_fact(lambda: f"📉 Market average: ${df['Best_Price'].mean():.0f}." if lang=="English" else f"📉 متوسط السعر: ${df['Best_Price'].mean():.0f}.")
     add_fact(lambda: f"🎯 Best deal: **{df.loc[df['Value_Score'].idxmax(), h_col]}**." if lang=="English" else f"🎯 أفضل صفقة: **{df.loc[df['Value_Score'].idxmax(), h_col]}**.")
     add_fact(lambda: f"🏢 {df[h_col].nunique()} unique hotels found." if lang=="English" else f"🏢 تم العثور على {df[h_col].nunique()} فندق فريد.")
-    for i in range(25): add_fact(lambda: f"💡 Market insight #{i+10} generated for {city}." if lang=="English" else f"💡 رؤية سوقية #{i+10} تم توليدها لـ {city}.")
+    insight_templates = [
+        (lambda: f"📊 {city} has {df[h_col].nunique()} unique hotels in the selected data.", lambda: f"📊 يوجد في {city} عدد {df[h_col].nunique()} فندقاً فريداً في البيانات المختارة."),
+        (lambda: f"💵 The average hotel price is ${df['Best_Price'].mean():.0f}.", lambda: f"💵 متوسط سعر الفندق هو ${df['Best_Price'].mean():.0f}."),
+        (lambda: f"⬇️ The cheapest listed price is ${df['Best_Price'].min():.0f}.", lambda: f"⬇️ أقل سعر ظاهر هو ${df['Best_Price'].min():.0f}."),
+        (lambda: f"⬆️ The highest listed price is ${df['Best_Price'].max():.0f}.", lambda: f"⬆️ أعلى سعر ظاهر هو ${df['Best_Price'].max():.0f}."),
+        (lambda: f"⭐ The average rating is {df['Rate_Val'].mean():.1f}/10.", lambda: f"⭐ متوسط التقييم هو {df['Rate_Val'].mean():.1f}/10."),
+        (lambda: f"🏨 {int(df['Star'].dropna().median()) if df['Star'].notna().any() else 0}-star hotels are the median category.", lambda: f"🏨 الفئة الوسطية هي فنادق {int(df['Star'].dropna().median()) if df['Star'].notna().any() else 0} نجوم."),
+        (lambda: f"🎯 The best value score is {df['Value_Score'].replace([np.inf, -np.inf], np.nan).max():.3f}.", lambda: f"🎯 أعلى مؤشر قيمة هو {df['Value_Score'].replace([np.inf, -np.inf], np.nan).max():.3f}."),
+        (lambda: f"📅 The dataset contains {df['booking_dt'].dt.date.nunique()} booking dates.", lambda: f"📅 تحتوي البيانات على {df['booking_dt'].dt.date.nunique()} تاريخ حجز."),
+        (lambda: f"🗓️ The dataset contains {df['arrival_dt'].dt.date.nunique()} arrival dates.", lambda: f"🗓️ تحتوي البيانات على {df['arrival_dt'].dt.date.nunique()} تاريخ وصول."),
+        (lambda: f"🔎 {df['Best_Price'].notna().sum()} records have a valid positive price.", lambda: f"🔎 يوجد {df['Best_Price'].notna().sum()} سجلاً بسعر صحيح موجب."),
+        (lambda: f"🏷️ The most common arrival day is {df['day of arrival'].mode().iat[0]}.", lambda: f"🏷️ أكثر يوم وصول تكراراً هو {df['day of arrival'].mode().iat[0]}."),
+        (lambda: f"💡 The price spread is ${df['Best_Price'].max() - df['Best_Price'].min():.0f}.", lambda: f"💡 الفرق بين أعلى وأقل سعر هو ${df['Best_Price'].max() - df['Best_Price'].min():.0f}."),
+    ]
+    for en, ar in insight_templates:
+        add_fact(en if lang == "English" else ar)
     return facts
 
 # ======================================================================================
@@ -493,7 +510,11 @@ def main():
         with tab2:
             settings["public_access"] = st.toggle("🔓 Public Access", value=settings.get("public_access", False))
             settings["download_code"] = st.text_input("Download Password", value=settings.get("download_code", "premium2026"))
-            settings["default_landing_page"] = st.selectbox("Landing Page", list(page_map.values()), index=list(page_map.values()).index(settings.get("default_landing_page")))
+            landing_options = list(page_map.values())
+            configured_landing = settings.get("default_landing_page", landing_options[0])
+            if configured_landing not in landing_options:
+                configured_landing = next((p for p in landing_options if str(configured_landing).strip().lower() in p.lower()), landing_options[0])
+            settings["default_landing_page"] = st.selectbox("Landing Page", landing_options, index=landing_options.index(configured_landing))
             if st.button("Save Settings"): config["_settings"] = settings; save_config(config); st.success("Updated!"); st.rerun()
         with tab3:
             stats = config.get("_stats", {"daily": {}, "total": {}})
