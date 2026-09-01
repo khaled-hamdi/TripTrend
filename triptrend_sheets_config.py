@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from datetime import datetime
+import streamlit as st
 from google_sheets_adapter import read_tab
 
 
+@st.cache_data(ttl=120, show_spinner=False)
 def _rows(tab):
     rows = read_tab(tab)
     if not rows:
