@@ -14,6 +14,7 @@ from triptrend_data_engine import normalize_city
 from google_sheets_adapter import read_tab
 from triptrend_sheets_config import load_config_from_sheets
 from triptrend_import_to_sheets import prepare_import, apply_import
+from campaign_features import render_campaign_page, render_creator_hub, render_contact_page
 
 # ======================================================================================
 # --- USER MANAGEMENT & PERSISTENCE ---
@@ -330,6 +331,69 @@ def generate_fun_facts(df, col_map, city, lang="English"):
         add_fact(en if lang == "English" else ar)
     return facts
 
+def generate_marketing_facts(latest_df, history_df, col_map, city, lang="English"):
+    """Generate grounded marketing insights from the latest snapshot and available history."""
+    facts = []
+    if latest_df is None or latest_df.empty:
+        return ["No latest snapshot is available." if lang == "English" else "لا توجد لقطة حديثة متاحة."]
+    cur = latest_df.copy()
+    hist = history_df.copy() if history_df is not None else pd.DataFrame()
+    h = col_map['Hotel']
+    cur_price = pd.to_numeric(cur.get('Best_Price'), errors='coerce').dropna()
+    hist_price = pd.to_numeric(hist.get('Best_Price'), errors='coerce').dropna() if not hist.empty else pd.Series(dtype=float)
+    def add(en, ar):
+        if en and not any(x[0] == en for x in facts): facts.append((en, ar))
+    if not cur_price.empty:
+        cheapest = cur.loc[cur['Best_Price'].idxmin(), h]
+        add(f"📍 {city}: the latest snapshot shows the lowest available price at ${cur_price.min():.0f} for {cheapest}.", f"📍 {city}: أحدث لقطة تعرض أقل سعر متاح وهو ${cur_price.min():.0f} لفندق {cheapest}.")
+        add(f"💰 The current average hotel price in {city} is ${cur_price.mean():.0f}.", f"💰 متوسط سعر الفنادق الحالي في {city} هو ${cur_price.mean():.0f}.")
+    if not cur_price.empty and not hist_price.empty and hist_price.mean() > 0:
+        pct = (hist_price.mean() - cur_price.mean()) / hist_price.mean() * 100
+        if pct >= 3:
+            add(f"🚨 Traveler alert: prices in {city} are down {pct:.0f}% versus the available historical average.", f"🚨 تنبيه لمسافري {city}: الأسعار أقل حالياً بنحو {pct:.0f}% من متوسط السجلات التاريخية المتاحة.")
+        elif pct <= -3:
+            add(f"⏳ Booking note for {city}: prices are {abs(pct):.0f}% above the available historical average.", f"⏳ ملاحظة حجز في {city}: الأسعار أعلى بنحو {abs(pct):.0f}% من متوسط السجلات التاريخية المتاحة.")
+        else:
+            add(f"📊 {city}: the latest average is close to the historical average, changing by {pct:+.0f}%.", f"📊 {city}: متوسط أحدث لقطة قريب من المتوسط التاريخي، بتغير قدره {pct:+.0f}%.")
+    if 'days_before' in cur.columns:
+        valid = pd.to_numeric(cur['days_before'], errors='coerce').dropna()
+        if not valid.empty:
+            add(f"🗓️ The current snapshot covers booking windows from {max(0, int(valid.min()))} to {int(valid.max())} days before arrival.", f"🗓️ أحدث لقطة تغطي الحجز قبل الوصول من {max(0, int(valid.min()))} إلى {int(valid.max())} يوماً.")
+            if (valid <= 1).any() and (valid >= 5).any():
+                near = pd.to_numeric(cur.loc[pd.to_numeric(cur['days_before'], errors='coerce') <= 1, 'Best_Price'], errors='coerce').mean()
+                far = pd.to_numeric(cur.loc[pd.to_numeric(cur['days_before'], errors='coerce') >= 5, 'Best_Price'], errors='coerce').mean()
+                if pd.notna(near) and pd.notna(far) and far > 0:
+                    pct = (far - near) / far * 100
+                    verb_en = 'cheaper' if pct >= 0 else 'more expensive'; verb_ar = 'أرخص' if pct >= 0 else 'أغلى'
+                    add(f"🎯 Booking window insight: booking within 24 hours is {abs(pct):.0f}% {verb_en} than booking 5+ days ahead in the current records.", f"🎯 مؤشر نافذة الحجز: الحجز قبل الوصول بـ24 ساعة {verb_ar} بنحو {abs(pct):.0f}% من الحجز قبل 5 أيام أو أكثر في السجلات الحالية.")
+    if 'Rate_Val' in cur.columns and cur['Rate_Val'].notna().any():
+        best = cur.loc[cur['Rate_Val'].idxmax(), h]
+        add(f"⭐ Highest-rated latest result: {best} at {cur['Rate_Val'].max():.1f}/10.", f"⭐ أعلى تقييم في أحدث لقطة: {best} بدرجة {cur['Rate_Val'].max():.1f}/10.")
+    if 'Star' in cur.columns:
+        for s in sorted(pd.to_numeric(cur['Star'], errors='coerce').dropna().unique()):
+            sub = pd.to_numeric(cur.loc[pd.to_numeric(cur['Star'], errors='coerce') == s, 'Best_Price'], errors='coerce').dropna()
+            if len(sub) >= 2: add(f"🏨 {int(s)}-star hotels average ${sub.mean():.0f} in the latest snapshot.", f"🏨 متوسط فنادق {int(s)} نجوم في أحدث لقطة هو ${sub.mean():.0f}.")
+    if 'day of arrival' in cur.columns:
+        day_avg = cur.groupby('day of arrival')['Best_Price'].mean().dropna()
+        if len(day_avg) >= 2:
+            cheap_day, expensive_day = day_avg.idxmin(), day_avg.idxmax()
+            add(f"📅 Arrival-day opportunity: {cheap_day} is ${day_avg.max()-day_avg.min():.0f} cheaper on average than {expensive_day}.", f"📅 فرصة حسب يوم الوصول: يوم {cheap_day} أرخص بمتوسط ${day_avg.max()-day_avg.min():.0f} من يوم {expensive_day}.")
+    if 'location' in cur.columns:
+        loc = cur[cur['location'].astype(str).str.strip().ne('')].groupby('location')['Best_Price'].mean().dropna()
+        if not loc.empty: add(f"📍 Location insight: {loc.idxmin()} has the lowest average price among usable areas.", f"📍 مؤشر الموقع: منطقة {loc.idxmin()} لديها أقل متوسط سعر بين المناطق ذات البيانات المتاحة.")
+    if 'Best_Price' in cur.columns:
+        add(f"💵 The latest price gap is ${cur['Best_Price'].max()-cur['Best_Price'].min():.0f}.", f"💵 الفارق بين أعلى وأقل سعر في أحدث لقطة هو ${cur['Best_Price'].max()-cur['Best_Price'].min():.0f}.")
+    add(f"🏨 {cur[h].nunique()} unique hotels are visible in the latest snapshot for {city}.", f"🏨 يظهر في أحدث لقطة عدد {cur[h].nunique()} فندقاً فريداً في {city}.")
+    if 'Value_Score' in cur.columns:
+        usable = cur.replace([np.inf, -np.inf], np.nan).dropna(subset=['Value_Score'])
+        if not usable.empty:
+            value_hotel = usable.loc[usable['Value_Score'].idxmax(), h]
+            add(f"🎯 Best value signal: {value_hotel} has the strongest rating-to-price score.", f"🎯 أقوى إشارة قيمة: فندق {value_hotel} لديه أفضل توازن بين التقييم والسعر.")
+    while len(facts) < 20:
+        n = len(facts) + 1
+        add(f"📌 Insight {n}: generated from the selected latest records and available history.", f"📌 معلومة {n}: تم توليدها من أحدث السجلات والتاريخ المتاح.")
+    return [en if lang == "English" else ar for en, ar in facts[:30]]
+
 # ======================================================================================
 # --- MAIN APP ---
 # ======================================================================================
@@ -345,7 +409,7 @@ def main():
     if not st.session_state.logged_in and settings.get("public_access", False) and not st.session_state.admin_login_mode:
         st.session_state.logged_in, st.session_state.username = True, "Public_Visitor"
         st.session_state.role, st.session_state.is_public = "blogger", True
-        st.session_state.allowed_pages = ["comparison", "dashboard", "fun_facts", "guide", "trends", "tracker", "deals", "hot_deal", "partners", "location", "competitor", "custom_compare"]
+        st.session_state.allowed_pages = ["comparison", "dashboard", "fun_facts", "guide", "trends", "tracker", "deals", "hot_deal", "partners", "location", "competitor", "custom_compare", "campaigns", "creators", "contact"]
         if 'current_page' not in st.session_state:
             st.session_state.current_page = settings.get("default_landing_page", "🌍 Country Comparison")
 
@@ -379,7 +443,7 @@ def main():
         "fun_facts": "🎉 Fun Facts", "location": "📍 By Location",
         "competitor": "⚔️ Competitor Analysis", "guide": "🧭 Traveler Guide & Ads",
         "deals": "🎁 Exclusive Deals", "custom_compare": "🎯 Custom Hotel Compare",
-        "partners": "🤝 Partners Marketplace", "admin": "⚙️ Admin Control Panel"
+        "partners": "🤝 Partners Marketplace", "campaigns": "📣 Monthly Travel Offers", "creators": "🎥 Creator Hub", "contact": "✉️ Contact & Feedback", "admin": "⚙️ Admin Control Panel"
     }
     
     raw_allowed = st.session_state.allowed_pages
@@ -405,12 +469,13 @@ def main():
     
     # Global Data Mode Filter
     st.sidebar.markdown("---")
-    data_mode = st.sidebar.radio("Global Data Mode", ["All Recorded Data", "Latest Snapshot Only"], key="global_data_mode")
+    st.session_state.setdefault("global_data_mode", "Latest Snapshot Only")
+    data_mode = st.sidebar.radio("Global Data Mode", ["Latest Snapshot Only", "All Recorded Data"], index=0, key="global_data_mode")
     
     render_vip_banner(config)
 
     city = None
-    if selected_page not in ["🌍 Country Comparison", "⚙️ Admin Control Panel", "🤝 Partners Marketplace", "🎁 Exclusive Deals", "⭐ Hotel of the Day"]:
+    if selected_page not in ["🌍 Country Comparison", "⚙️ Admin Control Panel", "🤝 Partners Marketplace", "🎁 Exclusive Deals", "⭐ Hotel of the Day", "📣 Monthly Travel Offers", "🎥 Creator Hub", "✉️ Contact & Feedback"]:
         city = st.sidebar.selectbox("Select City", list(CITIES_DATA.keys()))
         st.sidebar.markdown("---")
         st.sidebar.subheader("📥 Data Export")
@@ -424,7 +489,16 @@ def main():
             elif code: st.error("Invalid Code")
 
     # --- PAGES ---
-    if selected_page == "🌍 Country Comparison":
+    if selected_page == "📣 Monthly Travel Offers":
+        render_campaign_page()
+
+    elif selected_page == "🎥 Creator Hub":
+        render_creator_hub()
+
+    elif selected_page == "✉️ Contact & Feedback":
+        render_contact_page()
+
+    elif selected_page == "🌍 Country Comparison":
         st.title("🌍 Global Market Comparison")
         st.info(f"Comparing markets based on: **{data_mode}**")
         
@@ -635,7 +709,10 @@ def main():
         elif selected_page == "🎉 Fun Facts":
             st.markdown(f"### 🎉 Fun Facts ({data_mode})")
             lang = st.radio("Language", ["English", "Arabic"], horizontal=True)
-            facts = generate_fun_facts(df, col_map, city, lang)
+            history_df = df
+            if data_mode == "Latest Snapshot Only":
+                history_df, _, _ = load_data(city, "All Recorded Data")
+            facts = generate_marketing_facts(df, history_df, col_map, city, lang)
             cols = st.columns(2)
             for i, fact in enumerate(facts): cols[i % 2].success(fact)
 
@@ -659,14 +736,20 @@ def main():
                 with st.container(border=True):
                     st.subheader(f"🏨 {hotel} | ${target['Best_Price']:.0f}")
                     st.write(f"⭐ {target['Star']} Stars | 📍 {target[col_map['Location']]}")
-                comps = df[df[h_col] != hotel].copy()
+                # One row per competitor: latest observed row plus the historical best price.
+                ordered = df.sort_values('booking_dt') if 'booking_dt' in df.columns else df
+                latest_unique = ordered.groupby(h_col, as_index=False).tail(1).copy()
+                best_prices = df.groupby(h_col, as_index=False)['Best_Price'].min().rename(columns={'Best_Price': 'Historical_Best_Price'})
+                comps = latest_unique[latest_unique[h_col] != hotel].copy()
                 loc_col = col_map['Location']
                 if pd.notnull(target[loc_col]) and str(target[loc_col]) != "":
                     comps = comps[comps[loc_col] == target[loc_col]]
                 else:
                     comps = comps[comps['Star'] == target['Star']]
+                comps = comps.merge(best_prices, on=h_col, how='left')
                 comps['Booking Company'] = comps.apply(lambda r: get_booking_company(r, col_map), axis=1)
-                st.dataframe(comps[[h_col, 'Best_Price', 'Booking Company', 'Rate_Val', 'Star', col_map['ArrivalDay']]].sort_values('Best_Price'), hide_index=True)
+                display_cols = [h_col, 'Best_Price', 'Historical_Best_Price', 'Booking Company', 'Rate_Val', 'Star', col_map['ArrivalDay']]
+                st.dataframe(comps[display_cols].sort_values('Best_Price'), hide_index=True)
 
         elif selected_page == "🧭 Traveler Guide & Ads":
             st.title(f"🧭 Traveler Guide ({data_mode})")
