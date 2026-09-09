@@ -66,7 +66,7 @@ def _track(event_type: str, campaign_id: str = "", offer_id: str = "", creator_i
         append_rows("Engagement_Events", [[
             uuid.uuid4().hex, now.strftime("%Y-%m-%d"), now.strftime("%H:%M:%S"), event_type,
             campaign_id, offer_id, creator_id, page, city, "", _session_id(), "Web", "TripTrend", "", "", "",
-        ]])
+        ]], headers=TAB_HEADERS["Engagement_Events"])
     except Exception:
         # Analytics must never break the public page.
         pass
@@ -191,7 +191,7 @@ def _render_campaign_form() -> None:
             "Pending Review", "", "", "",
         ]
         try:
-            append_rows("Campaign_Requests", [row])
+            append_rows("Campaign_Requests", [row], headers=TAB_HEADERS["Campaign_Requests"])
             st.success("Your campaign request was submitted for review.")
             if not trial:
                 st.info("Payment is reviewed manually. The campaign is not published until payment is confirmed.")
@@ -246,7 +246,7 @@ def render_contact_page() -> None:
                 f"MSG-{uuid.uuid4().hex[:10]}", _now().strftime("%Y-%m-%d %H:%M:%S"), name, email, contact,
                 "Email" if email else "Phone", kind, subject, message, city, "", "", st.session_state.get("current_page", "Contact"),
                 "New", "Normal", "", "", "", "", True,
-            ]])
+            ]], headers=TAB_HEADERS["Feedback_Messages"])
             st.success("Your message was sent successfully.")
         except Exception as exc:
             st.error(f"Could not send your message: {exc}")

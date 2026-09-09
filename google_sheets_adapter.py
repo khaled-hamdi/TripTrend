@@ -63,7 +63,29 @@ def read_tab(tab_name: str, range_end: str = 'ZZ') -> list[list]:
     return result.get('values', [])
 
 
-def append_rows(tab_name: str, rows: Iterable[Sequence]):
+def ensure_tab(tab_name: str, headers: Sequence | None = None):
+    """Create a missing sheet tab and optionally write its header row."""
+    metadata = get_metadata()
+    titles = {s.get('properties', {}).get('title') for s in metadata.get('sheets', [])}
+    if tab_name not in titles:
+        _service().spreadsheets().batchUpdate(
+            spreadsheetId=spreadsheet_id(),
+            body={'requests': [{'addSheet': {'properties': {'title': tab_name}}}]},
+        ).execute()
+    if headers:
+        current = read_tab(tab_name, range_end='A1')
+        if not current:
+            _service().spreadsheets().values().update(
+                spreadsheetId=spreadsheet_id(),
+                range=f"'{tab_name}'!A1",
+                valueInputOption='RAW',
+                body={'values': [list(headers)]},
+            ).execute()
+
+
+def append_rows(tab_name: str, rows: Iterable[Sequence], headers: Sequence | None = None):
+    if headers:
+        ensure_tab(tab_name, headers)
     values = [list(row) for row in rows]
     if not values:
         return None
