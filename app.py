@@ -695,6 +695,7 @@ def main():
                     })
                     if st.button('✅ Approve and write to Google Sheets', type='primary', key='approve_daily_import'):
                         result = apply_import(prepared)
+                        st.cache_data.clear()
                         st.success(f"Import completed: {result['history_added']} price records, {result['master_added']} hotels, {result['aliases_added']} aliases.")
                 except Exception as e:
                     st.error(f"Import preview failed: {e}")

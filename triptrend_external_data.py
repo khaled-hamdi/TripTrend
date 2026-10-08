@@ -30,6 +30,10 @@ def _city_from_tab(tab: str, prefix: str):
     return tab[len(prefix):].replace("_", " ").strip()
 
 
+def city_key(value):
+    return re.sub(r"[^a-z0-9]", "", str(value or "").casefold())
+
+
 def _col(df, names):
     lookup = {str(c).strip().casefold(): c for c in df.columns}
     for n in names:
@@ -55,8 +59,9 @@ def external_events() -> pd.DataFrame:
             "City_or_Venue": df[_col(df, ["City_or_Venue", "Venue", "Location"]) ] if _col(df, ["City_or_Venue", "Venue", "Location"]) else "",
             "Source_Tab": tab,
         })
+        out["Event_Date"] = out["Date"]
         frames.append(out)
-    return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=["City","Event_Name","Date","Time","Cost","City_or_Venue","Source_Tab"])
+    return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=["City","Event_Name","Date","Event_Date","Time","Cost","City_or_Venue","Source_Tab"])
 
 
 @st.cache_data(ttl=300, show_spinner=False)
@@ -79,7 +84,7 @@ def city_prices() -> pd.DataFrame:
             "Category": df[cat] if cat else "",
             "Source_Tab": tab,
         })
-        out["Price_Value"] = pd.to_numeric(out["Raw_Price"].astype(str).str.replace(r"[^0-9.\\-]", "", regex=True), errors="coerce")
+        out["Price_Value"] = pd.to_numeric(out["Raw_Price"].astype(str).str.replace(r"[^0-9.\-]", "", regex=True), errors="coerce")
         out["Currency"] = out["Raw_Price"].astype(str).str.extract(r"([£$€¥₹₺]|Dh|E£|Fr\\.)", expand=False).fillna("")
         frames.append(out)
     return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=["City","Item_Name","Raw_Price","Raw_Range","Category","Source_Tab","Price_Value","Currency"])

@@ -8,7 +8,7 @@ import pandas as pd
 import streamlit as st
 
 from google_sheets_adapter import read_tab, append_rows, ensure_tab
-from triptrend_external_data import external_events, city_prices, external_weather, external_currency, external_flights
+from triptrend_external_data import external_events, city_prices, external_weather, external_currency, external_flights, city_key
 
 # These tabs are created automatically if the connected native Google Sheet is missing them.
 NEW_TAB_HEADERS = {
@@ -69,7 +69,7 @@ def _event_rows(city: str) -> pd.DataFrame:
     if "Status" in events.columns:
         events = events[events["Status"].astype(str).str.lower().isin(["active", "approved", "featured", ""])].copy()
     if city and "City" in events.columns:
-        events = events[events["City"].astype(str).str.strip().str.casefold() == city.strip().casefold()]
+        events = events[events["City"].map(city_key) == city_key(city)]
     return events
 
 
@@ -92,6 +92,7 @@ def _render_widget(row, key):
 def render_trip_planner(city: str, data_loader, data_mode: str, config: dict):
     st.title(f"🧳 Plan Your Trip: {city}")
     st.caption("A compact city snapshot combining hotel intelligence, events, travel costs, and verified traveler experiences.")
+    visit_date = st.date_input("📅 Visit / arrival date", value=datetime.now().date(), key=f"visit_date_{city}")
     df, cmap, err = data_loader(city, data_mode)
     hotel_available = not (err or df is None or df.empty)
     if not hotel_available:
@@ -122,13 +123,24 @@ def render_trip_planner(city: str, data_loader, data_mode: str, config: dict):
         vals = pd.to_numeric(flights.get("Price", flights.get("Price_From", pd.Series(dtype=float))), errors="coerce").dropna()
         snapshot.append({"Item": "Flights", "Summary": f"From ${vals.min():,.0f}" if not vals.empty else "Data available"})
     if not weather.empty:
-        w = weather[weather.get("City", pd.Series(dtype=str)).astype(str).str.casefold().eq(city.casefold())] if "City" in weather.columns else weather
+        w = weather[weather.get("City", pd.Series(dtype=str)).map(city_key).eq(city_key(city))] if "City" in weather.columns else weather
+        if "Forecast_Date" in w.columns:
+            chosen = w[w["Forecast_Date"].astype(str).eq(str(visit_date))]
+            if not chosen.empty: w = chosen
         if not w.empty:
             r = w.iloc[-1]
             snapshot.append({"Item": "Weather", "Summary": f"High {r.get('Temperature_Max', '—')}° / Low {r.get('Temperature_Min', '—')}°"})
     if not currency.empty:
-        snapshot.append({"Item": "Currency", "Summary": "Latest exchange-rate record available"})
-    for name, table, value_col in [("Food", food, "Price"), ("Transport", transport, "Price"), ("Activities", activities, "Price")]:
+        valid_currency = currency.dropna(subset=["Dollar"]) if "Dollar" in currency.columns else currency
+        snapshot.append({"Item": "Currency", "Summary": f"{len(valid_currency)} currency rates vs USD"})
+    if not city_costs.empty:
+        city_cost_snapshot = city_costs[city_costs["City"].astype(str).str.casefold().eq(city.casefold())]
+        for name, category in [("Food", "restaurant|food"), ("Transport", "transport")]:
+            part = city_cost_snapshot[city_cost_snapshot["Category"].astype(str).str.casefold().str.contains(category, na=False)]
+            if not part.empty:
+                vals = pd.to_numeric(part["Price_Value"], errors="coerce").dropna()
+                snapshot.append({"Item": name, "Summary": f"{vals.min():,.2f}–{vals.max():,.2f}" if not vals.empty else "Data available"})
+    for name, table, value_col in [("Activities", activities, "Price")]:
         if not table.empty:
             vals = pd.to_numeric(table.get(value_col, table.get("Price_From", pd.Series(dtype=float))), errors="coerce").dropna()
             snapshot.append({"Item": name, "Summary": f"${vals.min():,.0f}–${vals.max():,.0f}" if not vals.empty else "Data available"})
@@ -141,8 +153,16 @@ def render_trip_planner(city: str, data_loader, data_mode: str, config: dict):
     if events.empty:
         st.info("No active events have been added for this city yet.")
     else:
-        cols = [c for c in ["Event_Name", "Event_Type", "Start_Date", "End_Date", "Location", "Description"] if c in events.columns]
+        cols = [c for c in ["Event_Name", "Date", "Event_Date", "Time", "Cost", "City_or_Venue"] if c in events.columns]
         st.dataframe(events[cols].head(20), hide_index=True, use_container_width=True)
+
+    st.subheader("🧾 City price snapshot")
+    selected_costs = city_costs[city_costs["City"].map(city_key).eq(city_key(city))] if not city_costs.empty else pd.DataFrame()
+    if selected_costs.empty:
+        st.info("No city-cost records were found for this destination.")
+    else:
+        price_cols = [c for c in ["Item_Name", "Raw_Price", "Raw_Range", "Category", "Currency"] if c in selected_costs.columns]
+        st.dataframe(selected_costs[price_cols].head(30), hide_index=True, use_container_width=True)
 
     st.subheader("💰 Trip Cost Calculator — estimated range")
     c1, c2, c3 = st.columns(3)

@@ -49,18 +49,32 @@ def get_metadata():
 
 
 def list_tabs() -> list[str]:
-    metadata = get_metadata()
+    try:
+        import streamlit as st
+        @st.cache_data(ttl=120, show_spinner=False)
+        def _cached():
+            return get_metadata()
+        metadata = _cached()
+    except Exception:
+        metadata = get_metadata()
     return [s['properties']['title'] for s in metadata.get('sheets', [])]
 
 
 def read_tab(tab_name: str, range_end: str = 'ZZ') -> list[list]:
-    result = _service().spreadsheets().values().get(
-        spreadsheetId=spreadsheet_id(),
-        range=f"'{tab_name}'!A1:{range_end}",
-        majorDimension='ROWS',
-        valueRenderOption='UNFORMATTED_VALUE',
-    ).execute()
-    return result.get('values', [])
+    try:
+        import streamlit as st
+        @st.cache_data(ttl=90, show_spinner=False)
+        def _cached(tab, end):
+            result = _service().spreadsheets().values().get(
+                spreadsheetId=spreadsheet_id(), range=f"'{tab}'!A1:{end}",
+                majorDimension='ROWS', valueRenderOption='UNFORMATTED_VALUE').execute()
+            return result.get('values', [])
+        return _cached(tab_name, range_end)
+    except Exception:
+        result = _service().spreadsheets().values().get(
+            spreadsheetId=spreadsheet_id(), range=f"'{tab_name}'!A1:{range_end}",
+            majorDimension='ROWS', valueRenderOption='UNFORMATTED_VALUE').execute()
+        return result.get('values', [])
 
 
 def ensure_tab(tab_name: str, headers: Sequence | None = None):

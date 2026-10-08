@@ -66,8 +66,11 @@ def prepare_import(path: str | Path, import_id: str | None = None, import_date: 
     return {'records': records, 'summary': summary, 'history_rows': history_rows, 'master_rows': master_rows, 'alias_rows': alias_rows, 'log_rows': log_rows}
 
 
-def _append_in_batches(tab_name, rows, batch_size=500):
+def _append_in_batches(tab_name, rows, headers=None, batch_size=500):
     rows = list(rows)
+    if headers is not None:
+        from google_sheets_adapter import ensure_tab
+        ensure_tab(tab_name, headers)
     for start in range(0, len(rows), batch_size):
         append_rows(tab_name, rows[start:start + batch_size])
 
@@ -75,11 +78,11 @@ def _append_in_batches(tab_name, rows, batch_size=500):
 def apply_import(prepared):
     # Keep each API request small enough for reliable Streamlit Cloud execution.
     if prepared['history_rows']:
-        _append_in_batches('Price_History', prepared['history_rows'])
+        _append_in_batches('Price_History', prepared['history_rows'], PRICE_HEADERS)
     if prepared['master_rows']:
-        _append_in_batches('Hotels_Master', prepared['master_rows'])
+        _append_in_batches('Hotels_Master', prepared['master_rows'], MASTER_HEADERS)
     if prepared['alias_rows']:
-        _append_in_batches('Hotel_Aliases', prepared['alias_rows'])
+        _append_in_batches('Hotel_Aliases', prepared['alias_rows'], ALIAS_HEADERS)
     if prepared['log_rows']:
-        _append_in_batches('Import_Log', prepared['log_rows'])
+        _append_in_batches('Import_Log', prepared['log_rows'], LOG_HEADERS)
     return {'history_added': len(prepared['history_rows']), 'master_added': len(prepared['master_rows']), 'aliases_added': len(prepared['alias_rows']), 'log_rows': len(prepared['log_rows'])}
