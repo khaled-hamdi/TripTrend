@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
+import time
 import pandas as pd
 
 from google_sheets_adapter import append_rows, read_tab, list_tabs
@@ -94,13 +95,28 @@ def prepare_import_from_google_raw_tabs(import_id: str | None = None, import_dat
     return prepare_import(tmp.name, import_id=import_id, import_date=import_date)
 
 
-def _append_in_batches(tab_name, rows, headers=None, batch_size=500):
+def _append_in_batches(tab_name, rows, headers=None, batch_size=200):
     rows = list(rows)
     if headers is not None:
         from google_sheets_adapter import ensure_tab
         ensure_tab(tab_name, headers)
     for start in range(0, len(rows), batch_size):
-        append_rows(tab_name, rows[start:start + batch_size])
+        chunk = rows[start:start + batch_size]
+        last_error = None
+        for attempt in range(5):
+            try:
+                append_rows(tab_name, chunk)
+                time.sleep(0.25)
+                last_error = None
+                break
+            except Exception as exc:
+                last_error = exc
+                status = getattr(getattr(exc, 'resp', None), 'status', None)
+                if status not in (429, 500, 502, 503, 504):
+                    raise RuntimeError(f"Google Sheets write failed for {tab_name}, rows {start + 1}-{start + len(chunk)}: {exc}") from exc
+                time.sleep(2 ** attempt)
+        if last_error is not None:
+            raise RuntimeError(f"Google Sheets write failed after retries for {tab_name}, rows {start + 1}-{start + len(chunk)}: {last_error}") from last_error
 
 
 def apply_import(prepared):

@@ -695,10 +695,13 @@ def main():
                 raw_prepared = st.session_state['raw_prepared']
                 st.write({'Raw-tab price records': len(raw_prepared['history_rows']), 'New hotels': len(raw_prepared['master_rows']), 'New aliases': len(raw_prepared['alias_rows'])})
                 if st.button('✅ Approve raw-tab import', type='primary', key='approve_raw_tab_import'):
-                    result = apply_import(raw_prepared)
-                    st.session_state.pop('raw_prepared', None)
-                    st.cache_data.clear()
-                    st.success(f"Imported {result['history_added']} hotel records from Google Sheets.")
+                    try:
+                        result = apply_import(raw_prepared)
+                        st.session_state.pop('raw_prepared', None)
+                        st.cache_data.clear()
+                        st.success(f"Imported {result['history_added']} hotel records from Google Sheets.")
+                    except Exception as exc:
+                        st.error(f"Google Sheets write failed. You can safely retry; already written rows will be deduplicated. Details: {exc}")
             uploaded = st.file_uploader("Choose daily workbook", type=['xlsx'], key='daily_import_file')
             if uploaded is not None:
                 import tempfile
