@@ -30,7 +30,12 @@ def _existing(tab):
     rows = read_tab(tab)
     if not rows:
         return pd.DataFrame()
-    return pd.DataFrame(rows[1:], columns=rows[0])
+    headers = [str(x).strip() for x in rows[0]]
+    width = len(headers)
+    # Google Sheets may omit trailing empty cells in individual rows.
+    # Normalize every row to the header width before constructing the frame.
+    normalized = [(list(row) + [''] * width)[:width] for row in rows[1:]]
+    return pd.DataFrame(normalized, columns=headers)
 
 
 def prepare_import(path: str | Path, import_id: str | None = None, import_date: str | None = None):
@@ -109,4 +114,3 @@ def apply_import(prepared):
     if prepared['log_rows']:
         _append_in_batches('Import_Log', prepared['log_rows'], LOG_HEADERS)
     return {'history_added': len(prepared['history_rows']), 'master_added': len(prepared['master_rows']), 'aliases_added': len(prepared['alias_rows']), 'log_rows': len(prepared['log_rows'])}
-
