@@ -13,11 +13,11 @@ import io
 from triptrend_data_engine import normalize_city
 from google_sheets_adapter import read_tab
 from triptrend_sheets_config import load_config_from_sheets
-from triptrend_import_to_sheets import prepare_import, apply_import
-from campaign_features import render_campaign_page, render_creator_hub, render_contact_page
-from triptrend_new_features import (ensure_new_tabs, render_trip_planner, render_best_dates, render_advertiser_account_gate, render_advertiser_notice)
-from triptrend_admin_tools import render_content_admin
-from triptrend_external_data import external_cities
+from triptrend_import_to_sheets_v2 import prepare_import, apply_import, prepare_import_from_google_raw_tabs
+from campaign_features_v2 import render_campaign_page, render_creator_hub, render_contact_page
+from triptrend_new_features_v2 import (ensure_new_tabs, render_trip_planner, render_best_dates, render_advertiser_account_gate, render_advertiser_notice)
+from triptrend_admin_tools_v2 import render_content_admin
+from triptrend_external_data import external_cities, city_key
 
 # ======================================================================================
 # --- USER MANAGEMENT & PERSISTENCE ---
@@ -33,7 +33,7 @@ def sheets_configured():
         return bool(secret_id and secret_sa)
     except Exception:
         return False
-APP_VERSION = "Ver 1.2"
+APP_VERSION = "Ver 2.0"
 
 def get_default_config():
     return {
@@ -504,17 +504,16 @@ def main():
             st.session_state.logged_in, st.session_state.is_public, st.session_state.admin_login_mode = False, False, True
             st.rerun()
     
-    # Global Data Mode Filter
-    st.sidebar.markdown("---")
+    # Page-level data mode selector: kept in the content area so visitors can see the active scope.
     st.session_state.setdefault("global_data_mode", "Latest Snapshot Only")
-    data_mode = st.sidebar.radio("Global Data Mode", ["Latest Snapshot Only", "All Recorded Data"], index=0, key="global_data_mode")
+    st.markdown("### Data scope")
+    data_mode = st.radio("Choose the records used on this page", ["Latest Snapshot Only", "All Recorded Data"], horizontal=True, index=0, key="global_data_mode")
     
     render_vip_banner(config)
 
     city = None
     if selected_page not in ["🌍 Compare Destinations", "⚙️ Admin Control Panel", "🎟️ Deals & Events", "💼 Advertise", "👥 Traveler Community", "🧳 Plan Your Trip", "📅 Best Dates & Booking Advice", "⭐ Hotel of the Day", "📣 Campaigns", "🎥 Creator Hub", "✉️ Contact & Feedback"]:
-        city = st.sidebar.selectbox("Select City", list(CITIES_DATA.keys()))
-        st.sidebar.markdown("---")
+        city = st.selectbox("Select City", list(CITIES_DATA.keys()), key=f"page_city_{selected_page}")
         st.sidebar.subheader("📥 Data Export")
         with st.sidebar.expander("Protected Download"):
             code = st.text_input("Enter Download Code", type="password")
@@ -527,7 +526,13 @@ def main():
 
     # --- PAGES ---
     if selected_page == "🧳 Plan Your Trip":
-        planner_options = list(dict.fromkeys(list(CITIES_DATA.keys()) + external_cities()))
+        planner_options = []
+        seen_city_keys = set()
+        for candidate in list(CITIES_DATA.keys()) + external_cities():
+            key = city_key(candidate)
+            if key and key not in seen_city_keys:
+                seen_city_keys.add(key)
+                planner_options.append(candidate)
         planner_city = st.selectbox("Destination", planner_options, key="planner_city")
         render_trip_planner(planner_city, load_data, data_mode, config)
 
@@ -679,6 +684,21 @@ def main():
         with tab5:
             st.subheader("📥 Import Daily Excel Workbook")
             st.caption("Upload one workbook containing one Tab per city. The preview is deduplicated before anything is written to Google Sheets.")
+            if st.button('🔄 Build Price_History from HOTEL_RAW tabs already in Google Sheets', key='import_raw_tabs'):
+                try:
+                    raw_prepared = prepare_import_from_google_raw_tabs()
+                    st.session_state['raw_prepared'] = raw_prepared
+                    st.success(f"Prepared {len(raw_prepared['history_rows'])} hotel price records from the existing HOTEL_RAW tabs.")
+                except Exception as exc:
+                    st.error(f"Could not read HOTEL_RAW tabs: {exc}")
+            if st.session_state.get('raw_prepared'):
+                raw_prepared = st.session_state['raw_prepared']
+                st.write({'Raw-tab price records': len(raw_prepared['history_rows']), 'New hotels': len(raw_prepared['master_rows']), 'New aliases': len(raw_prepared['alias_rows'])})
+                if st.button('✅ Approve raw-tab import', type='primary', key='approve_raw_tab_import'):
+                    result = apply_import(raw_prepared)
+                    st.session_state.pop('raw_prepared', None)
+                    st.cache_data.clear()
+                    st.success(f"Imported {result['history_added']} hotel records from Google Sheets.")
             uploaded = st.file_uploader("Choose daily workbook", type=['xlsx'], key='daily_import_file')
             if uploaded is not None:
                 import tempfile
