@@ -13,11 +13,11 @@ import io
 from triptrend_data_engine import normalize_city
 from google_sheets_adapter import read_tab
 from triptrend_sheets_config import load_config_from_sheets
-from triptrend_import_to_sheets_v2 import prepare_import, apply_import, prepare_import_from_google_raw_tabs
+from triptrend_import_to_sheets_v2 import prepare_import, apply_import, prepare_import_from_google_raw_tabs, repair_dates_from_workbook
 from campaign_features_v2 import render_campaign_page, render_creator_hub, render_contact_page
 from triptrend_new_features_v2 import (ensure_new_tabs, render_trip_planner, render_best_dates, render_advertiser_account_gate, render_advertiser_notice)
 from triptrend_admin_tools_v2 import render_content_admin
-from triptrend_external_data import external_cities, city_key
+from triptrend_external_data_v2 import external_cities, city_key, available_city_names
 
 # ======================================================================================
 # --- USER MANAGEMENT & PERSISTENCE ---
@@ -482,6 +482,10 @@ def main():
         "creators": "🎥 Creator Hub", "contact": "✉️ Contact & Feedback", "admin": "⚙️ Admin Control Panel"
     }
     
+    city_options = available_city_names(tuple(CITIES_DATA.keys()))
+    if not city_options:
+        city_options = list(CITIES_DATA.keys())
+
     raw_allowed = st.session_state.allowed_pages
     nav_options = []
     if st.session_state.role == "admin" or "all" in [str(x).lower() for x in raw_allowed]:
@@ -513,7 +517,7 @@ def main():
 
     city = None
     if selected_page not in ["🌍 Compare Destinations", "⚙️ Admin Control Panel", "🎟️ Deals & Events", "💼 Advertise", "👥 Traveler Community", "🧳 Plan Your Trip", "📅 Best Dates & Booking Advice", "⭐ Hotel of the Day", "📣 Campaigns", "🎥 Creator Hub", "✉️ Contact & Feedback"]:
-        city = st.selectbox("Select City", list(CITIES_DATA.keys()), key=f"page_city_{selected_page}")
+        city = st.selectbox("Select City", city_options, key=f"page_city_{selected_page}")
         st.sidebar.subheader("📥 Data Export")
         with st.sidebar.expander("Protected Download"):
             code = st.text_input("Enter Download Code", type="password")
@@ -526,18 +530,12 @@ def main():
 
     # --- PAGES ---
     if selected_page == "🧳 Plan Your Trip":
-        planner_options = []
-        seen_city_keys = set()
-        for candidate in list(CITIES_DATA.keys()) + external_cities():
-            key = city_key(candidate)
-            if key and key not in seen_city_keys:
-                seen_city_keys.add(key)
-                planner_options.append(candidate)
+        planner_options = city_options
         planner_city = st.selectbox("Destination", planner_options, key="planner_city")
         render_trip_planner(planner_city, load_data, data_mode, config)
 
     elif selected_page == "📅 Best Dates & Booking Advice":
-        dates_city = st.selectbox("Destination", list(CITIES_DATA.keys()), key="dates_city")
+        dates_city = st.selectbox("Destination", city_options, key="dates_city")
         render_best_dates(dates_city, load_data, data_mode)
 
     elif selected_page == "🎟️ Deals & Events":
@@ -582,7 +580,8 @@ def main():
         min_rate = st.slider("Minimum Rating", 0.0, 10.0, 7.0)
         
         all_city_stats = []
-        for c, info in CITIES_DATA.items():
+        for c in city_options:
+            info = CITIES_DATA.get(c, {"emoji": "🌍"})
             c_df, c_map, _ = load_data(c, data_mode)
             if c_df is not None:
                 f_df = c_df[(c_df['Star'] >= c_stars[0]) & (c_df['Star'] <= c_stars[1]) & (c_df['Rate_Val'] >= min_rate)]
@@ -619,7 +618,7 @@ def main():
 
     elif selected_page == "⭐ Hotel of the Day":
         st.title("⭐ Hotel of the Day")
-        city_for_deal = st.selectbox("Select City for Deals", list(CITIES_DATA.keys()))
+        city_for_deal = st.selectbox("Select City for Deals", city_options)
         df, col_map, err = load_data(city_for_deal, data_mode)
         if df is not None:
             best_deal = df.sort_values('Value_Score', ascending=False).head(1).iloc[0]
@@ -702,6 +701,23 @@ def main():
                         st.success(f"Imported {result['history_added']} hotel records from Google Sheets.")
                     except Exception as exc:
                         st.error(f"Google Sheets write failed. You can safely retry; already written rows will be deduplicated. Details: {exc}")
+            st.markdown('---')
+            st.subheader('🛠️ Repair dates from the original Excel file')
+            st.caption('Upload the original workbook that contains the correct booking and arrival dates. Existing Price_History rows will be matched and updated without adding duplicates.')
+            repair_file = st.file_uploader('Choose original workbook for date repair', type=['xlsx'], key='date_repair_file')
+            if repair_file is not None and st.button('🛠️ Repair Booking_Date and Arrival_Date', key='repair_dates_button'):
+                import tempfile
+                repair_path = tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx')
+                repair_path.write(repair_file.getvalue())
+                repair_path.close()
+                try:
+                    repair_result = repair_dates_from_workbook(repair_path.name)
+                    st.cache_data.clear()
+                    st.success(f"Date repair completed: {repair_result['updated']} rows updated.")
+                    st.info(f"Unmatched: {repair_result['unmatched']} · Ambiguous: {repair_result['ambiguous']} · Existing rows: {repair_result['total_existing']}")
+                except Exception as exc:
+                    st.error(f"Date repair failed: {exc}")
+
             uploaded = st.file_uploader("Choose daily workbook", type=['xlsx'], key='daily_import_file')
             if uploaded is not None:
                 import tempfile
@@ -877,7 +893,7 @@ def main():
 
         elif selected_page == "🎯 Custom Hotel Compare":
             st.markdown(f"### 🎯 Custom Comparison ({data_mode})")
-            selected_cities = st.multiselect("1. Select Cities", list(CITIES_DATA.keys()))
+            selected_cities = st.multiselect("1. Select Cities", city_options)
             if selected_cities:
                 comparison_data = []
                 for c in selected_cities:

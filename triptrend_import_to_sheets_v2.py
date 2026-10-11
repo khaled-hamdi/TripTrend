@@ -130,3 +130,61 @@ def apply_import(prepared):
     if prepared['log_rows']:
         _append_in_batches('Import_Log', prepared['log_rows'], LOG_HEADERS)
     return {'history_added': len(prepared['history_rows']), 'master_added': len(prepared['master_rows']), 'aliases_added': len(prepared['alias_rows']), 'log_rows': len(prepared['log_rows'])}
+
+
+def repair_dates_from_workbook(path: str | Path):
+    """Repair Booking_Date/Arrival_Date in existing Price_History from the original Excel workbook."""
+    from google_sheets_adapter import replace_tab
+    from triptrend_data_engine import load_daily_workbook, normalize_name
+    parsed, _ = load_daily_workbook(path)
+    rows = read_tab('Price_History')
+    if not rows:
+        raise RuntimeError('Price_History is empty; there are no existing rows to repair.')
+    headers = [str(x).strip() for x in rows[0]]
+    width = len(headers)
+    body = [(list(r) + [''] * width)[:width] for r in rows[1:]]
+    if not body:
+        raise RuntimeError('Price_History has a header but no data rows.')
+    frame = pd.DataFrame(body, columns=headers)
+    required = {'City', 'Source_Hotel_Name', 'Best_Price', 'Import_Date', 'Booking_Date', 'Arrival_Date'}
+    missing = required - set(frame.columns)
+    if missing:
+        raise RuntimeError(f'Price_History is missing columns: {", ".join(sorted(missing))}')
+    if parsed.empty:
+        raise RuntimeError('The uploaded workbook produced no valid hotel records.')
+
+    def key(row):
+        city = normalize_name(row.get('City', ''))
+        hotel = normalize_name(row.get('Source_Hotel_Name', ''))
+        price = pd.to_numeric(pd.Series([row.get('Best_Price', '')]), errors='coerce').iloc[0]
+        price_key = '' if pd.isna(price) else f'{float(price):.2f}'
+        imp = str(row.get('Import_Date', '')).strip()[:10]
+        return city, hotel, price_key, imp
+
+    parsed_keys = {}
+    for _, r in parsed.iterrows():
+        b = r.get('Booking_Date')
+        a = r.get('Arrival_Date')
+        if pd.isna(b) and pd.isna(a):
+            continue
+        parsed_keys.setdefault(key(r), []).append(r)
+
+    updated = 0
+    unmatched = 0
+    ambiguous = 0
+    for idx, r in frame.iterrows():
+        matches = parsed_keys.get(key(r), [])
+        if len(matches) == 1:
+            source = matches[0]
+            if pd.notna(source.get('Booking_Date')):
+                frame.at[idx, 'Booking_Date'] = pd.Timestamp(source['Booking_Date']).strftime('%Y-%m-%d')
+            if pd.notna(source.get('Arrival_Date')):
+                frame.at[idx, 'Arrival_Date'] = pd.Timestamp(source['Arrival_Date']).strftime('%Y-%m-%d')
+            updated += 1
+        elif len(matches) > 1:
+            ambiguous += 1
+        else:
+            unmatched += 1
+
+    replace_tab('Price_History', [headers] + frame.astype(object).where(pd.notna(frame), '').values.tolist())
+    return {'updated': updated, 'unmatched': unmatched, 'ambiguous': ambiguous, 'total_existing': len(frame)}

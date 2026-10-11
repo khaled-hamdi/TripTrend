@@ -170,9 +170,11 @@ def read_city_sheet(ws: pd.DataFrame, city: str, source_file: str, import_id: st
             if pd.notna(row[price_col]) and clean_text(row[company_col]):
                 df.at[idx, 'Best_Company'] = clean_text(row[company_col])
                 break
-    df['Booking_Date'] = df['date of creat booking'].map(parse_date)
-    if df['Booking_Date'].isna().all():
-        df['Booking_Date'] = df['start book'].map(parse_date)
+    primary_booking = df['date of creat booking'].map(parse_date)
+    fallback_booking = df['start book'].map(parse_date)
+    # Use the fallback per row, not only when the complete column is empty.
+    # Daily hotel sheets often contain mixed rows with one of the two fields blank.
+    df['Booking_Date'] = primary_booking.fillna(fallback_booking)
     # Full dates are preferred; day names are retained as labels for later inference.
     df['Arrival_Date'] = [infer_arrival_date(b, a) for b, a in zip(df['Booking_Date'], df['day of arrival'])]
     df['Rate'] = pd.to_numeric(df['Rate'], errors='coerce')
