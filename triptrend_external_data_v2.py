@@ -5,6 +5,7 @@ from datetime import date
 import pandas as pd
 import streamlit as st
 from google_sheets_adapter import list_tabs, read_tab
+from triptrend_data_engine import normalize_city
 
 
 def _frame(tab: str) -> pd.DataFrame:
@@ -197,3 +198,27 @@ def available_city_names(base_names=()):
         label = aliases.get(raw.casefold(), raw)
         result.setdefault(key, label)
     return sorted(result.values(), key=str.casefold)
+
+
+@st.cache_data(ttl=120, show_spinner=False)
+def price_history_city_names():
+    """Return only cities that actually have hotel rows in Price_History."""
+    try:
+        rows = read_tab("Price_History")
+        if not rows or len(rows) < 2:
+            return []
+        headers = [str(x).strip() for x in rows[0]]
+        if "City" not in headers:
+            return []
+        idx = headers.index("City")
+        values = [r[idx] for r in rows[1:] if len(r) > idx and str(r[idx]).strip()]
+        result = {}
+        for value in values:
+            raw = str(value).strip()
+            canonical = normalize_city(raw)
+            key = city_key(canonical)
+            if key:
+                result.setdefault(key, canonical)
+        return sorted(result.values(), key=str.casefold)
+    except Exception:
+        return []

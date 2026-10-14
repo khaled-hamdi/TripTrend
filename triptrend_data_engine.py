@@ -102,6 +102,7 @@ def normalize_city(sheet_name: str) -> str:
         'paris': 'Paris', 'london': 'London', 'newyork': 'NewYork',
         'dubai': 'Dubai', 'istanbul': 'Istanbul', 'cairo': 'Cairo',
         'switzerland': 'Switzerland', 'switherland': 'Switzerland',
+        'geneva': 'Geneva', 'gniev': 'Geneva',
     }
     return mapping.get(key, clean_text(sheet_name))
 

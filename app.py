@@ -17,7 +17,7 @@ from triptrend_import_to_sheets_v2 import prepare_import, apply_import, prepare_
 from campaign_features_v2 import render_campaign_page, render_creator_hub, render_contact_page
 from triptrend_new_features_v2 import (ensure_new_tabs, render_trip_planner, render_best_dates, render_advertiser_account_gate, render_advertiser_notice)
 from triptrend_admin_tools_v2 import render_content_admin
-from triptrend_external_data_v2 import external_cities, city_key, available_city_names
+from triptrend_external_data_v2 import external_cities, city_key, available_city_names, price_history_city_names
 
 # ======================================================================================
 # --- USER MANAGEMENT & PERSISTENCE ---
@@ -155,7 +155,9 @@ def load_data_from_google_sheets(city_name, data_mode="All Data"):
     rows = read_tab('Price_History')
     if not rows or len(rows) < 2:
         return None, None, 'Price_History is empty.'
-    raw = pd.DataFrame(rows[1:], columns=rows[0])
+    headers = [str(x).strip() for x in rows[0]]
+    width = len(headers)
+    raw = pd.DataFrame([(list(r) + [''] * width)[:width] for r in rows[1:]], columns=headers)
     raw = raw.loc[:, ~raw.columns.duplicated()].copy()
     if 'City' not in raw.columns:
         return None, None, 'Price_History is missing City.'
@@ -482,7 +484,8 @@ def main():
         "creators": "🎥 Creator Hub", "contact": "✉️ Contact & Feedback", "admin": "⚙️ Admin Control Panel"
     }
     
-    city_options = available_city_names(tuple(CITIES_DATA.keys()))
+    # Hotel pages must be driven by the hotel history, not by unrelated external tabs.
+    city_options = price_history_city_names()
     if not city_options:
         city_options = list(CITIES_DATA.keys())
 

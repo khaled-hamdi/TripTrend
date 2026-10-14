@@ -3,12 +3,25 @@ from datetime import datetime
 import uuid
 import pandas as pd
 import streamlit as st
-from google_sheets_adapter import append_rows, read_tab
+from google_sheets_adapter import append_rows, read_tab, replace_tab
 from triptrend_new_features_v2 import NEW_TAB_HEADERS, _records
 
 
 def _append(tab, values):
     append_rows(tab, [values], headers=NEW_TAB_HEADERS.get(tab))
+
+
+def _set_status(tab, row_index, status):
+    rows = read_tab(tab)
+    if not rows or row_index + 1 >= len(rows):
+        return False
+    headers = [str(x).strip() for x in rows[0]]
+    body = [(list(r) + [''] * len(headers))[:len(headers)] for r in rows[1:]]
+    if 'Status' not in headers:
+        return False
+    body[row_index][headers.index('Status')] = status
+    replace_tab(tab, [headers] + body)
+    return True
 
 
 def render_content_admin():
@@ -58,9 +71,10 @@ def render_content_admin():
         with st.form("admin_add_widget"):
             c1, c2 = st.columns(2)
             partner = c1.text_input("Partner name *")
-            category = c2.text_input("Category", value="Flights")
+            category = c2.selectbox("Category", ["Flights", "Hotels", "Car Rentals", "Travel SIM", "Airport Transfer", "Luggage Storage", "Tours", "Other"])
             city = c1.text_input("City (blank = all cities)")
-            pages = c2.text_input("Target pages", value="Plan Your Trip")
+            page_choices = ["Plan Your Trip", "Best Dates", "Hotel of the Day", "Deal Radar", "Traveler Guide", "Exclusive Deals", "Dashboard"]
+            pages = ", ".join(c2.multiselect("Target pages", page_choices, default=["Plan Your Trip"]))
             placement = c1.selectbox("Placement", ["Inline", "Sidebar", "Featured"])
             widget_type = c2.selectbox("Type", ["Link", "Widget HTML", "Iframe", "Banner"])
             url = st.text_input("Affiliate URL")
@@ -81,8 +95,27 @@ def render_content_admin():
         if contributors.empty: st.info("No contributors yet.")
         else: st.dataframe(contributors.sort_values("Points", ascending=False), hide_index=True, use_container_width=True)
     with tabs[4]:
+        st.caption("Review visitor-submitted content here. Select a row, then approve or reject it.")
         for tab in ["Campaign_Requests", "Feedback_Messages", "Travel_Experiences"]:
             st.markdown(f"**{tab}**")
             records = _records(tab)
             if records.empty: st.info("No records.")
-            else: st.dataframe(records.tail(50), hide_index=True, use_container_width=True)
+            else:
+                view = records.tail(50).copy()
+                st.dataframe(view, hide_index=True, use_container_width=True)
+                if 'Status' in view.columns:
+                    pending = view[view['Status'].astype(str).str.lower().isin(['new', 'pending', 'submitted', ''])]
+                    if not pending.empty:
+                        choices = {}
+                        for idx, row in pending.iterrows():
+                            label = str(row.get('Name', row.get('Offer_Title', row.get('Campaign_Name', 'Submission'))))[:80]
+                            choices[f"{idx}: {label}"] = idx
+                        selected = st.selectbox(f"Select pending {tab} row", list(choices), key=f"moderate_{tab}")
+                        idx = choices[selected]
+                        c1, c2 = st.columns(2)
+                        if c1.button(f"✅ Approve {tab}", key=f"approve_{tab}"):
+                            if _set_status(tab, idx, 'Approved'):
+                                st.success('Approved.'); st.cache_data.clear(); st.rerun()
+                        if c2.button(f"❌ Reject {tab}", key=f"reject_{tab}"):
+                            if _set_status(tab, idx, 'Rejected'):
+                                st.warning('Rejected.'); st.cache_data.clear(); st.rerun()

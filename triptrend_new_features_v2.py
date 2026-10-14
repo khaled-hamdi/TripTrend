@@ -8,7 +8,7 @@ import pandas as pd
 import streamlit as st
 
 from google_sheets_adapter import read_tab, append_rows, ensure_tab
-from triptrend_external_data import external_events, city_prices, external_weather, external_currency, external_flights, city_key
+from triptrend_external_data_v2 import external_events, city_prices, external_weather, external_currency, external_flights, city_key
 
 # These tabs are created automatically if the connected native Google Sheet is missing them.
 NEW_TAB_HEADERS = {
@@ -99,7 +99,21 @@ def render_trip_planner(city: str, data_loader, data_mode: str, config: dict):
         st.info(err or "Hotel data is not available yet. Showing the available city data below.")
         df = pd.DataFrame()
 
-    prices = pd.to_numeric(df.get("Best_Price", pd.Series(dtype=float)), errors="coerce").dropna()
+    # The planner must use the selected arrival date when history contains real dates.
+    selected_df = df
+    if hotel_available and "arrival_dt" in df.columns:
+        arrival = pd.to_datetime(df["arrival_dt"], errors="coerce")
+        exact = df[arrival.dt.date == visit_date]
+        if not exact.empty:
+            selected_df = exact
+        else:
+            weekday = df[arrival.dt.day_name().eq(visit_date.strftime("%A"))]
+            if not weekday.empty:
+                selected_df = weekday
+                st.info(f"No exact hotel records were found for {visit_date.isoformat()}; showing the historical **{visit_date.strftime('%A')}** pattern instead.")
+            else:
+                st.info(f"No hotel records were found for {visit_date.isoformat()}. Showing the available historical range instead.")
+    prices = pd.to_numeric(selected_df.get("Best_Price", pd.Series(dtype=float)), errors="coerce").dropna()
     hotels_from = prices.min() if not prices.empty else None
     hotel_avg = prices.mean() if not prices.empty else None
     events = _event_rows(city)
@@ -115,7 +129,7 @@ def render_trip_planner(city: str, data_loader, data_mode: str, config: dict):
     cards[0].metric("🏨 Hotels from", f"${hotels_from:,.0f}" if hotels_from is not None else "N/A")
     cards[1].metric("📊 Typical hotel", f"${hotel_avg:,.0f}" if hotel_avg is not None else "N/A")
     cards[2].metric("📅 Events", int(len(events)))
-    cards[3].metric("🧾 Hotel records", int(len(df)) if hotel_available else "N/A")
+    cards[3].metric("🧾 Hotel records", int(len(selected_df)) if hotel_available else "N/A")
 
     st.subheader("Quick Snapshot")
     snapshot = []
@@ -207,6 +221,8 @@ def render_trip_planner(city: str, data_loader, data_mode: str, config: dict):
     if not widgets.empty:
         widgets = widgets[widgets.get("Status", pd.Series("Active", index=widgets.index)).astype(str).str.lower().isin(["active", "featured", "approved"])]
         widgets = widgets[(widgets.get("City", pd.Series("", index=widgets.index)).astype(str).isin(["", city]))]
+        if "Target_Pages" in widgets.columns:
+            widgets = widgets[widgets["Target_Pages"].astype(str).str.contains("Plan Your Trip|All|Dashboard", case=False, regex=True, na=False)]
         if not widgets.empty:
             st.subheader("Useful for this trip")
             for i, (_, row) in enumerate(widgets.sort_values("Priority", ascending=True).head(3).iterrows()):
