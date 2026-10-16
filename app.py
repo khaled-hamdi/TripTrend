@@ -17,7 +17,7 @@ from google_sheets_adapter import read_tab
 from triptrend_sheets_config import load_config_from_sheets
 from triptrend_import_to_sheets_v2 import prepare_import, apply_import, prepare_import_from_google_raw_tabs, repair_dates_from_workbook
 from campaign_features_v2 import render_campaign_page, render_creator_hub, render_contact_page
-from triptrend_new_features_v2 import (ensure_new_tabs, render_trip_planner, render_best_dates, render_advertiser_account_gate, render_advertiser_notice)
+from triptrend_new_features_v2 import (ensure_new_tabs, render_trip_planner, render_best_dates, render_advertiser_account_gate, render_advertiser_notice, render_targeted_widgets)
 from triptrend_admin_tools_v2 import render_content_admin
 from triptrend_external_data_v2 import external_cities, city_key, available_city_names, price_history_city_names
 
@@ -672,8 +672,16 @@ def main():
         st.title("⭐ Hotel of the Day")
         city_for_deal = st.selectbox("Select City for Deals", city_options)
         df, col_map, err = load_data(city_for_deal, data_mode)
-        if df is not None:
-            best_deal = df.sort_values('Value_Score', ascending=False).head(1).iloc[0]
+        if df is not None and not df.empty:
+            eligible = df[pd.to_numeric(df.get('Best_Price'), errors='coerce').gt(0)].copy()
+            if eligible.empty:
+                st.warning("No valid hotel prices are available for this city in the selected data scope.")
+            else:
+                eligible['Value_Score'] = pd.to_numeric(eligible.get('Value_Score'), errors='coerce').replace([np.inf, -np.inf], np.nan).fillna(0)
+                best_deal = eligible.sort_values('Value_Score', ascending=False).head(1).iloc[0]
+        else:
+            best_deal = None
+        if best_deal is not None:
             with st.container(border=True):
                 st.markdown(f"<h1 style='text-align: center; color: #FFD700;'>🏆 Today's Top Pick in {city_for_deal}</h1>", unsafe_allow_html=True)
                 st.markdown(f"<h2 style='text-align: center;'>🏨 {best_deal[col_map['Hotel']]}</h2>", unsafe_allow_html=True)
@@ -686,6 +694,7 @@ def main():
                 st.write(f"📍 **Location:** {best_deal[col_map['Location']]}")
                 st.write(f"📝 **Description:** {best_deal[col_map['Desc']]}")
                 render_affiliate_button(best_deal, col_map, config, "hot_deal")
+        render_targeted_widgets("Hotel of the Day", city_for_deal)
 
     elif selected_page == "🎁 Exclusive Deals":
         st.title("🎁 Exclusive Traveler Deals")
@@ -922,7 +931,7 @@ def main():
 
         elif selected_page in ["🧭 Traveler Guide & Ads", "🧭 Traveler Guide"]:
             st.title(f"🧭 Traveler Guide ({data_mode})")
-            render_ad_grid(config.get("_affiliate_widgets", []), cols=3)
+            render_targeted_widgets("Traveler Guide", city)
             st.markdown("---")
             tab_val, tab_search = st.tabs(["💎 Best Value", "🔍 Feature Search"])
             with tab_val:

@@ -90,6 +90,42 @@ def _render_widget(row, key):
             st.link_button("Explore service", url, key=key)
 
 
+def _sheet_dates(values):
+    """Parse normal dates and Google Sheets/Excel serial dates safely."""
+    parsed = pd.to_datetime(values, errors="coerce")
+    numeric = pd.to_numeric(values, errors="coerce")
+    serial = numeric.between(20000, 80000)
+    parsed.loc[serial] = pd.Timestamp("1899-12-30") + pd.to_timedelta(numeric[serial], unit="D")
+    return parsed
+
+
+def render_targeted_widgets(page_name: str, city: str = "", limit: int = 6):
+    """Render admin-assigned widgets for a specific page and optional city."""
+    widgets = _records("Affiliate_Widgets")
+    if widgets.empty:
+        return
+    status = widgets.get("Status", pd.Series("Active", index=widgets.index)).astype(str).str.lower()
+    widgets = widgets[status.isin(["active", "featured", "approved"])].copy()
+    if city and "City" in widgets.columns:
+        city_keys = widgets["City"].astype(str).map(city_key)
+        widgets = widgets[(city_keys == "") | (city_keys == city_key(city))]
+    today = pd.Timestamp.now().normalize()
+    if "Start_Date" in widgets.columns:
+        start = _sheet_dates(widgets["Start_Date"])
+        widgets = widgets[start.isna() | (start <= today)]
+    if "End_Date" in widgets.columns:
+        end = _sheet_dates(widgets["End_Date"])
+        widgets = widgets[end.isna() | (end >= today)]
+    if "Target_Pages" in widgets.columns:
+        target = widgets["Target_Pages"].astype(str).str.casefold()
+        widgets = widgets[target.str.contains(page_name.casefold(), na=False) | target.str.contains("all", na=False)]
+    if widgets.empty:
+        return
+    st.subheader("Useful for this trip" if page_name == "Plan Your Trip" else "Featured partners")
+    for i, (_, row) in enumerate(widgets.sort_values("Priority", ascending=True).head(limit).iterrows()):
+        _render_widget(row, f"targeted_{city_key(page_name)}_{i}")
+
+
 def render_trip_planner(city: str, data_loader, data_mode: str, config: dict):
     st.title(f"🧳 Plan Your Trip: {city}")
     st.caption("A compact city snapshot combining hotel intelligence, events, travel costs, and verified traveler experiences.")
@@ -224,10 +260,10 @@ def render_trip_planner(city: str, data_loader, data_mode: str, config: dict):
         widgets = widgets[(widgets.get("City", pd.Series("", index=widgets.index)).astype(str).isin(["", city]))]
         today = pd.Timestamp.now().normalize()
         if "Start_Date" in widgets.columns:
-            start = pd.to_datetime(widgets["Start_Date"], errors="coerce")
+            start = _sheet_dates(widgets["Start_Date"])
             widgets = widgets[start.isna() | (start <= today)]
         if "End_Date" in widgets.columns:
-            end = pd.to_datetime(widgets["End_Date"], errors="coerce")
+            end = _sheet_dates(widgets["End_Date"])
             widgets = widgets[end.isna() | (end >= today)]
         if "Target_Pages" in widgets.columns:
             widgets = widgets[widgets["Target_Pages"].astype(str).str.contains("Plan Your Trip|All|Dashboard", case=False, regex=True, na=False)]
