@@ -32,6 +32,7 @@ def ensure_new_tabs():
             pass
 
 
+@st.cache_data(ttl=60, show_spinner=False)
 def _records(tab: str) -> pd.DataFrame:
     try:
         rows = read_tab(tab)
@@ -85,7 +86,7 @@ def _render_widget(row, key):
             # Streamlit components support HTML/iframe snippets supplied by a trusted admin.
             import streamlit.components.v1 as components
             components.html(code, height=220, scrolling=True)
-        elif url.startswith("http"):
+        if url.startswith("http"):
             st.link_button("Explore service", url, key=key)
 
 
@@ -221,6 +222,13 @@ def render_trip_planner(city: str, data_loader, data_mode: str, config: dict):
     if not widgets.empty:
         widgets = widgets[widgets.get("Status", pd.Series("Active", index=widgets.index)).astype(str).str.lower().isin(["active", "featured", "approved"])]
         widgets = widgets[(widgets.get("City", pd.Series("", index=widgets.index)).astype(str).isin(["", city]))]
+        today = pd.Timestamp.now().normalize()
+        if "Start_Date" in widgets.columns:
+            start = pd.to_datetime(widgets["Start_Date"], errors="coerce")
+            widgets = widgets[start.isna() | (start <= today)]
+        if "End_Date" in widgets.columns:
+            end = pd.to_datetime(widgets["End_Date"], errors="coerce")
+            widgets = widgets[end.isna() | (end >= today)]
         if "Target_Pages" in widgets.columns:
             widgets = widgets[widgets["Target_Pages"].astype(str).str.contains("Plan Your Trip|All|Dashboard", case=False, regex=True, na=False)]
         if not widgets.empty:

@@ -10,6 +10,8 @@ import re
 import json
 import random
 import io
+import hmac
+import hashlib
 from triptrend_data_engine import normalize_city
 from google_sheets_adapter import read_tab
 from triptrend_sheets_config import load_config_from_sheets
@@ -91,6 +93,48 @@ def update_last_login(username):
     if username in config:
         config[username]['last_login'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         save_config(config)
+
+
+def _session_secret():
+    try:
+        configured = str(st.secrets.get('TRIPTREND_SESSION_SECRET', '')).strip()
+    except Exception:
+        configured = ''
+    return (configured or os.getenv('TRIPTREND_SESSION_SECRET', '').strip() or
+            'triptrend-session-' + os.getenv('TRIPTREND_SPREADSHEET_ID', 'local') + '-v2').encode('utf-8')
+
+
+def persist_login(username):
+    signature = hmac.new(_session_secret(), str(username).encode('utf-8'), hashlib.sha256).hexdigest()
+    st.query_params['tt_user'] = str(username)
+    st.query_params['tt_sig'] = signature
+
+
+def restore_login(config):
+    try:
+        username = str(st.query_params.get('tt_user', '')).strip()
+        signature = str(st.query_params.get('tt_sig', '')).strip()
+        expected = hmac.new(_session_secret(), username.encode('utf-8'), hashlib.sha256).hexdigest()
+        if not username or not hmac.compare_digest(signature, expected):
+            return False
+        if username == 'Guest':
+            st.session_state.logged_in, st.session_state.username = True, 'Guest'
+            st.session_state.role, st.session_state.is_public = 'guest', True
+            st.session_state.allowed_pages = ['all']
+            return True
+        user = config.get(username)
+        if not isinstance(user, dict) or str(user.get('status', 'active')).lower() == 'inactive':
+            return False
+        expiry = datetime.strptime(str(user.get('expiry_date', '2099-12-31')), '%Y-%m-%d')
+        if datetime.now() > expiry:
+            return False
+        st.session_state.logged_in, st.session_state.username = True, username
+        st.session_state.role = user.get('role', 'contributor')
+        st.session_state.allowed_pages = user.get('allowed_pages', ['all'])
+        st.session_state.is_public, st.session_state.admin_login_mode = False, False
+        return True
+    except Exception:
+        return False
 
 # ======================================================================================
 # --- DATA CONFIG & SMART FILE SEARCH ---
@@ -413,6 +457,8 @@ def main():
     
     if 'logged_in' not in st.session_state: st.session_state.logged_in = False
     if 'admin_login_mode' not in st.session_state: st.session_state.admin_login_mode = False
+    if not st.session_state.logged_in and not st.session_state.admin_login_mode:
+        restore_login(config)
     
     if not st.session_state.logged_in and settings.get("public_access", True) and not st.session_state.admin_login_mode:
         st.title(f"🏨 TripTrend {APP_VERSION}")
@@ -424,6 +470,7 @@ def main():
                 st.session_state.role, st.session_state.is_public = "guest", True
                 st.session_state.allowed_pages = ["all"]
                 st.session_state.current_page = settings.get("default_landing_page", "🧳 Plan Your Trip")
+                persist_login('Guest')
                 st.rerun()
         with login_col:
             st.info("Contributors, advertisers, and admin can log in below.")
@@ -443,6 +490,7 @@ def main():
                         st.session_state.role, st.session_state.allowed_pages = user.get('role', 'contributor'), user.get('allowed_pages', ['all'])
                         st.session_state.is_public, st.session_state.admin_login_mode = False, False
                         st.session_state.current_page = settings.get("default_landing_page", "🧳 Plan Your Trip")
+                        persist_login(u)
                         update_last_login(u); st.rerun()
                 else: st.error("❌ Invalid credentials")
             else: st.error("❌ Invalid credentials")
@@ -465,6 +513,7 @@ def main():
                             st.session_state.role, st.session_state.allowed_pages = user['role'], user['allowed_pages']
                             st.session_state.is_public, st.session_state.admin_login_mode = False, False
                             st.session_state.current_page = settings.get("default_landing_page", "🌍 Country Comparison")
+                            persist_login(u)
                             update_last_login(u); st.rerun()
                 else: st.error("❌ Invalid Credentials")
             if st.session_state.admin_login_mode:
@@ -915,6 +964,7 @@ def main():
 
     if st.sidebar.button("Logout"):
         st.session_state.logged_in, st.session_state.is_public, st.session_state.admin_login_mode = False, False, False
+        st.query_params.clear()
         st.rerun()
 
 if __name__ == "__main__": main()

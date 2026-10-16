@@ -34,6 +34,7 @@ TAB_HEADERS = {
 }
 
 
+@st.cache_data(ttl=60, show_spinner=False)
 def _read_records(tab: str) -> pd.DataFrame:
     try:
         rows = read_tab(tab)

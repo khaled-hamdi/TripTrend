@@ -81,13 +81,19 @@ def render_content_admin():
             code = st.text_area("Widget/iframe HTML (optional)")
             desc = st.text_input("One-line description")
             priority = st.number_input("Priority", min_value=1, value=1, step=1)
+            start_date = c2.date_input("Start date")
+            end_date = c1.date_input("End date")
             ok = st.form_submit_button("Add partner/widget")
         if ok:
             if not partner.strip(): st.error("Partner name is required.")
             elif not url.strip() and not code.strip(): st.error("Provide an affiliate URL or widget code.")
             else:
-                _append("Affiliate_Widgets", [f"WID-{uuid.uuid4().hex[:8]}", partner, category, city, pages, placement, widget_type, code, url, desc, priority, "", "", "Active"])
-                st.success("Partner/widget added. It will appear in the selected context.")
+                if end_date < start_date:
+                    st.error("End date cannot be before start date.")
+                else:
+                    _append("Affiliate_Widgets", [f"WID-{uuid.uuid4().hex[:8]}", partner, category, city, pages, placement, widget_type, code, url, desc, priority, start_date.isoformat(), end_date.isoformat(), "Active"])
+                    st.cache_data.clear()
+                    st.success("Partner/widget added. It will appear in the selected context.")
         widgets = _records("Affiliate_Widgets")
         if not widgets.empty: st.dataframe(widgets.tail(20), hide_index=True, use_container_width=True)
     with tabs[3]:
