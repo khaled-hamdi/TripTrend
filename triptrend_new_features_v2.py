@@ -99,7 +99,7 @@ def _sheet_dates(values):
     return parsed
 
 
-def render_targeted_widgets(page_name: str, city: str = "", limit: int = 6):
+def render_targeted_widgets(page_name: str, city: str = "", limit: int = 8):
     """Render admin-assigned widgets for a specific page and optional city."""
     widgets = _records("Affiliate_Widgets")
     if widgets.empty:
