@@ -178,7 +178,7 @@ def _render_campaign_form() -> None:
         email = st.text_input("Email")
         phone = st.text_input("Phone or WhatsApp")
         advertiser_type = st.selectbox("Advertiser type", ["Company", "Blogger", "Service", "Tour Guide", "Driver", "Hotel", "Other"])
-        campaign_type = st.selectbox("Campaign type", ["Tour Package", "Hotel Offer", "Travel Service", "Creator Campaign", "Seasonal Campaign","info & content "و "Other"])
+        campaign_type = st.selectbox("Campaign type", ["Tour Package", "Hotel Offer", "Travel Service", "Creator Campaign", "Seasonal Campaign","info & content ", "Other"])
         title = st.text_input("Offer or campaign title *")
         city = st.text_input("City or destination")
         country = st.text_input("Country")
