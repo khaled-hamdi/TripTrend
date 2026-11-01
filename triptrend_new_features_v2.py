@@ -50,7 +50,7 @@ def _truthy(value):
 
 
 def _date(value):
-    parsed = pd.to_datetime(value, errors="coerce")
+    parsed = _sheet_dates(pd.Series([value])).iloc[0]
     return "" if pd.isna(parsed) else parsed.strftime("%Y-%m-%d")
 
 
@@ -99,7 +99,7 @@ def _sheet_dates(values):
     return parsed
 
 
-def render_targeted_widgets(page_name: str, city: str = "", limit: int = 8):
+def render_targeted_widgets(page_name: str, city: str = "", limit: int = 6):
     """Render admin-assigned widgets for a specific page and optional city."""
     widgets = _records("Affiliate_Widgets")
     if widgets.empty:
@@ -124,6 +124,137 @@ def render_targeted_widgets(page_name: str, city: str = "", limit: int = 8):
     st.subheader("Useful for this trip" if page_name == "Plan Your Trip" else "Featured partners")
     for i, (_, row) in enumerate(widgets.sort_values("Priority", ascending=True).head(limit).iterrows()):
         _render_widget(row, f"targeted_{city_key(page_name)}_{i}")
+
+
+def _event_date_series(events):
+    for col in ("Start_Date", "Event_Date", "Date", "start_date"):
+        if col in events.columns:
+            return _sheet_dates(events[col])
+    return pd.Series(pd.NaT, index=events.index)
+
+
+def render_events_explorer():
+    """Show destination cards, then upcoming events before a compact past-events section."""
+    events = external_events()
+    if events.empty:
+        events = _records("Events")
+    st.subheader("🗺️ Explore events by destination")
+    if events.empty or "City" not in events.columns:
+        st.info("No events have been added yet.")
+        return
+    events = events.copy()
+    dates = _event_date_series(events)
+    events["_event_date"] = dates
+    if "Status" in events.columns:
+        events = events[events["Status"].astype(str).str.lower().isin(["active", "approved", "featured", ""])].copy()
+    city_names = sorted([x for x in events["City"].astype(str).unique() if x.strip()], key=str.casefold)
+    if not city_names:
+        st.info("No event destinations are available yet.")
+        return
+    selected = st.session_state.get("event_city_card", city_names[0])
+    cols = st.columns(min(4, len(city_names)))
+    for i, name in enumerate(city_names):
+        subset = events[events["City"].astype(str).map(city_key).eq(city_key(name))]
+        upcoming_count = int((subset["_event_date"].isna() | (subset["_event_date"] >= pd.Timestamp.now().normalize())).sum())
+        with cols[i % len(cols)]:
+            if st.button(f"📍 {name}\n{upcoming_count} upcoming", key=f"event_city_{city_key(name)}", use_container_width=True):
+                st.session_state["event_city_card"] = name
+                st.rerun()
+    selected = st.session_state.get("event_city_card", city_names[0])
+    city_events = events[events["City"].astype(str).map(city_key).eq(city_key(selected))].copy()
+    today = pd.Timestamp.now().normalize()
+    upcoming = city_events[city_events["_event_date"].isna() | (city_events["_event_date"] >= today)].sort_values("_event_date")
+    past = city_events[city_events["_event_date"].notna() & (city_events["_event_date"] < today)].sort_values("_event_date", ascending=False)
+    st.markdown(f"### 📅 Upcoming events in {selected}")
+    if upcoming.empty:
+        st.info("No upcoming events are listed for this destination.")
+    else:
+        for _, row in upcoming.head(12).iterrows():
+            with st.container(border=True):
+                title = row.get("Event_Name", row.get("Name", "Event"))
+                date_text = _date(row.get("_event_date", "")) or "Date to be announced"
+                st.markdown(f"**🎉 {title}** · {date_text}")
+                st.caption(f"{row.get('Location', row.get('City_or_Venue', ''))} · {row.get('Cost', row.get('Price', '')) or 'Details available'}")
+                if str(row.get("Description", "")).strip(): st.write(row.get("Description"))
+    if not past.empty:
+        with st.expander(f"🕰️ Past events in {selected} ({len(past)})"):
+            for _, row in past.head(20).iterrows():
+                st.markdown(f"🗓️ **{row.get('Event_Name', row.get('Name', 'Event'))}** · {_date(row['_event_date'])}")
+
+
+def _community_session_id():
+    if not st.session_state.get("community_session_id"):
+        st.session_state["community_session_id"] = uuid.uuid4().hex
+    return st.session_state["community_session_id"]
+
+
+def _record_like(item_id: str, page: str, city: str = "") -> bool:
+    """Persist one like per browser session and award one contributor point."""
+    events = _records("Engagement_Events")
+    session_id = _community_session_id()
+    if not events.empty and {"Event_Type", "Offer_ID", "Session_ID"}.issubset(events.columns):
+        duplicate = events[(events["Event_Type"].astype(str).eq("Like")) & (events["Offer_ID"].astype(str).eq(item_id)) & (events["Session_ID"].astype(str).eq(session_id))]
+        if not duplicate.empty:
+            return False
+    now = datetime.now()
+    try:
+        append_rows("Engagement_Events", [[uuid.uuid4().hex, now.strftime("%Y-%m-%d"), now.strftime("%H:%M:%S"), "Like", item_id, "", "", page, city, "", session_id, "Web", "TripTrend", "", "", ""]], headers=["Event_ID", "Event_Date", "Event_Time", "Event_Type", "Offer_ID", "Campaign_ID", "Creator_ID", "Page_Name", "City", "Country", "Session_ID", "Device_Type", "Source_Channel", "UTM_Source", "UTM_Medium", "UTM_Campaign"])
+        contributor_id = st.session_state.get("contributor_id", "")
+        if contributor_id:
+            append_rows("Contributor_Points_Log", [[uuid.uuid4().hex, contributor_id, "Like", item_id, 1, "Approved", "Useful community interaction", now.strftime("%Y-%m-%d %H:%M:%S"), "system"]], headers=NEW_TAB_HEADERS["Contributor_Points_Log"])
+        st.cache_data.clear()
+        return True
+    except Exception:
+        return False
+
+
+def render_contributor_area(city: str = ""):
+    """Public contributor entry point: account, structured experience, and one-time likes."""
+    st.subheader("🤝 Share your travel experience")
+    st.caption("Create a contributor account to submit structured advice and earn points from approved contributions and useful likes.")
+    if not st.session_state.get("contributor_id"):
+        with st.expander("Contributor login / create account", expanded=False):
+            mode = st.radio("Account", ["Login", "Create account"], horizontal=True, key="contributor_mode")
+            username = st.text_input("Username", key="contributor_username")
+            password = st.text_input("Password", type="password", key="contributor_password")
+            if mode == "Create account":
+                display = st.text_input("Display name")
+            if st.button(mode, key="contributor_account_action"):
+                if not username.strip() or not password:
+                    st.error("Username and password are required.")
+                else:
+                    contributors = _records("Contributors")
+                    if mode == "Create account":
+                        if not contributors.empty and contributors.get("Username", pd.Series(dtype=str)).astype(str).str.casefold().eq(username.casefold()).any():
+                            st.error("This username is already registered.")
+                        else:
+                            cid = f"CON-{uuid.uuid4().hex[:10]}"
+                            append_rows("Contributors", [[cid, username, hashlib.sha256(password.encode()).hexdigest(), display or username, "", "", city, "Traveler", "", 0, "New", "Active", datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "", ""]], headers=NEW_TAB_HEADERS["Contributors"])
+                            st.session_state["contributor_id"] = cid
+                            st.session_state["contributor_name"] = display or username
+                            st.success("Account created. You can now submit experiences.")
+                    elif not contributors.empty:
+                        match = contributors[contributors.get("Username", pd.Series(dtype=str)).astype(str).eq(username)]
+                        if not match.empty and str(match.iloc[0].get("Password_or_Hash", "")) == hashlib.sha256(password.encode()).hexdigest():
+                            st.session_state["contributor_id"] = str(match.iloc[0].get("Contributor_ID"))
+                            st.session_state["contributor_name"] = str(match.iloc[0].get("Display_Name", username))
+                            st.success("Logged in as contributor.")
+                        else: st.error("Invalid contributor credentials.")
+    if st.session_state.get("contributor_id"):
+        with st.form("public_experience_form"):
+            exp_city = st.text_input("City", value=city)
+            kind = st.selectbox("Topic", ["Hotel", "Flight", "Prices", "Food", "Weather", "Transport", "Event", "Tour Guide", "Driver", "Other"])
+            score = st.slider("Your rating", 1, 10, 8)
+            title = st.text_input("Short title")
+            comment = st.text_area("Your experience")
+            submitted = st.form_submit_button("Publish for review")
+        if submitted:
+            if not exp_city.strip() or not comment.strip(): st.error("City and experience are required.")
+            else:
+                eid = f"EXP-{uuid.uuid4().hex[:10]}"
+                append_rows("Travel_Experiences", [[eid, st.session_state["contributor_id"], st.session_state.get("contributor_name", "Traveler"), exp_city, "", kind, title, comment, score, "/10", datetime.now().strftime("%Y-%m-%d"), datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "Pending Review", 0, ""]], headers=NEW_TAB_HEADERS["Travel_Experiences"])
+                append_rows("Contributor_Points_Log", [[uuid.uuid4().hex, st.session_state["contributor_id"], "Experience", eid, 1, "Pending", "Submitted travel experience", datetime.now().strftime("%Y-%m-%d %H:%M:%S"), ""]], headers=NEW_TAB_HEADERS["Contributor_Points_Log"])
+                st.cache_data.clear(); st.success("Submitted for admin review. You earned a pending contribution point.")
 
 
 def render_trip_planner(city: str, data_loader, data_mode: str, config: dict):
@@ -252,25 +383,19 @@ def render_trip_planner(city: str, data_loader, data_mode: str, config: dict):
             with st.container(border=True):
                 st.markdown(f"**{row.get('Contributor_Name', 'Traveler')}** · {row.get('Experience_Date', row.get('Submitted_At', ''))}")
                 st.write(str(row.get("Comment", row.get("Title", ""))))
-                st.caption(f"{row.get('Experience_Type', 'Travel experience')} · {row.get('City', city)} · ♥ {row.get('Likes', 0)}")
+                exp_id = str(row.get("Experience_ID", f"experience-{i}"))
+                event_rows = _records("Engagement_Events")
+                likes = int(((event_rows.get("Event_Type", pd.Series(dtype=str)).astype(str).eq("Like")) & event_rows.get("Offer_ID", pd.Series(dtype=str)).astype(str).eq(exp_id)).sum()) if not event_rows.empty else int(float(row.get("Likes", 0) or 0))
+                st.caption(f"{row.get('Experience_Type', 'Travel experience')} · {row.get('City', city)} · ♥ {likes}")
+                if st.button(f"♥ Like ({likes})", key=f"experience_like_{exp_id}_{i}"):
+                    if _record_like(exp_id, "Plan Your Trip", city):
+                        st.success("Thanks — your like was counted once for this session.")
+                    else:
+                        st.info("You already liked this contribution from this session.")
 
-    widgets = _records("Affiliate_Widgets")
-    if not widgets.empty:
-        widgets = widgets[widgets.get("Status", pd.Series("Active", index=widgets.index)).astype(str).str.lower().isin(["active", "featured", "approved"])]
-        widgets = widgets[(widgets.get("City", pd.Series("", index=widgets.index)).astype(str).isin(["", city]))]
-        today = pd.Timestamp.now().normalize()
-        if "Start_Date" in widgets.columns:
-            start = _sheet_dates(widgets["Start_Date"])
-            widgets = widgets[start.isna() | (start <= today)]
-        if "End_Date" in widgets.columns:
-            end = _sheet_dates(widgets["End_Date"])
-            widgets = widgets[end.isna() | (end >= today)]
-        if "Target_Pages" in widgets.columns:
-            widgets = widgets[widgets["Target_Pages"].astype(str).str.contains("Plan Your Trip|All|Dashboard", case=False, regex=True, na=False)]
-        if not widgets.empty:
-            st.subheader("Useful for this trip")
-            for i, (_, row) in enumerate(widgets.sort_values("Priority", ascending=True).head(3).iterrows()):
-                _render_widget(row, f"planner_widget_{i}")
+    render_contributor_area(city)
+
+    render_targeted_widgets("Plan Your Trip", city, limit=6)
 
 
 def render_best_dates(city: str, data_loader, data_mode: str):

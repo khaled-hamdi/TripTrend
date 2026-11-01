@@ -75,17 +75,43 @@ def _track(event_type: str, campaign_id: str = "", offer_id: str = "", creator_i
 
 def _safe_date(value: Any):
     parsed = pd.to_datetime(value, errors="coerce")
+    try:
+        numeric = float(value)
+        if 20000 <= numeric <= 80000:
+            parsed = pd.Timestamp("1899-12-30") + pd.to_timedelta(numeric, unit="D")
+    except Exception:
+        pass
     return parsed if not pd.isna(parsed) else pd.NaT
 
 
 def _active_offers() -> pd.DataFrame:
     offers = _read_records("Travel_Offers")
+    # An approved Campaign_Request is publishable even when the admin has not
+    # copied it manually into Travel_Offers yet.
+    requests = _read_records("Campaign_Requests")
+    if not requests.empty and "Status" in requests.columns:
+        approved = requests[requests["Status"].astype(str).str.lower().isin(["approved", "published", "active", "featured"])].copy()
+        if not approved.empty:
+            mapped = pd.DataFrame({
+                "Offer_ID": approved.get("Request_ID", pd.Series(index=approved.index)).astype(str),
+                "Offer_Title": approved.get("Offer_Title", pd.Series("Travel campaign", index=approved.index)),
+                "Advertiser_Name": approved.get("Advertiser_Name", pd.Series("Travel Partner", index=approved.index)),
+                "City": approved.get("City", pd.Series("", index=approved.index)),
+                "Description": approved.get("Campaign_Type", pd.Series("Approved travel campaign", index=approved.index)),
+                "Link_URL": approved.get("Link_URL", approved.get("Website_URL", pd.Series("", index=approved.index))),
+                "Status": approved.get("Status", pd.Series("Approved", index=approved.index)),
+                "Start_Display_Date": approved.get("Start_Date", pd.Series("", index=approved.index)),
+                "End_Display_Date": approved.get("End_Date", pd.Series("", index=approved.index)),
+                "Offer_Type": approved.get("Advertiser_Type", pd.Series("Campaign", index=approved.index)),
+                "Likes_Total": 0,
+            })
+            offers = pd.concat([offers, mapped], ignore_index=True) if not offers.empty else mapped
     if offers.empty:
         return offers
     now = pd.Timestamp.now().normalize()
     for col in ("Start_Display_Date", "End_Display_Date", "Campaign_Start_Date", "Campaign_End_Date"):
         if col in offers.columns:
-            offers[col] = pd.to_datetime(offers[col], errors="coerce")
+            offers[col] = offers[col].map(_safe_date)
     status = offers.get("Status", pd.Series("Active", index=offers.index)).astype(str).str.lower()
     active = status.isin(["active", "approved", "featured", "paid active", "active trial", ""])
     if "Start_Display_Date" in offers.columns:
@@ -103,7 +129,7 @@ def _active_offers() -> pd.DataFrame:
     return offers
 
 
-def _offer_card(row: pd.Series, idx: int, page_name: str = "Monthly Travel Offers") -> None:
+def _offer_card(row: pd.Series, idx: int, page_name: str = "Monthly Travel Offers", compact: bool = False) -> None:
     offer_id = str(row.get("Offer_ID", row.get("Campaign_ID", f"offer-{idx}")))
     title = str(row.get("Offer_Title", row.get("Title", "Travel Offer")))
     advertiser = str(row.get("Advertiser_Name", "Travel Partner"))
@@ -119,28 +145,40 @@ def _offer_card(row: pd.Series, idx: int, page_name: str = "Monthly Travel Offer
             st.write(f"**From:** {price} {row.get('Currency', 'USD')}")
         with c2:
             likes = int(float(row.get("Likes_Total", 0) or 0)) if str(row.get("Likes_Total", "")).strip() else 0
-            if st.button(f"♥ {likes} Like", key=f"like_{offer_id}_{idx}"):
-                like_key = f"liked_{offer_id}"
-                if not st.session_state.get(like_key, False):
-                    _track("Like", offer_id=offer_id, page=page_name, city=city)
-                    st.session_state[like_key] = True
-                    st.success("Liked")
+            events = _read_records("Engagement_Events")
+            session_id = _session_id()
+            already_liked = False
+            if not events.empty and {"Event_Type", "Offer_ID", "Session_ID"}.issubset(events.columns):
+                already_liked = not events[(events["Event_Type"].astype(str).eq("Like")) & (events["Offer_ID"].astype(str).eq(offer_id)) & (events["Session_ID"].astype(str).eq(session_id))].empty
+            if st.button(f"♥ {likes} {'Liked' if already_liked else 'Like'}", key=f"like_{offer_id}_{idx}", disabled=already_liked):
+                _track("Like", offer_id=offer_id, page=page_name, city=city)
+                st.cache_data.clear()
+                st.success("Liked once for this session.")
             link = str(row.get("Link_URL", "")).strip()
             if link.startswith("http"):
                 if st.button("View Details", key=f"details_{offer_id}_{idx}"):
                     _track("Details_View", offer_id=offer_id, page=page_name, city=city)
                     st.session_state[f"show_offer_{offer_id}"] = True
                 st.link_button("Book / Contact", link, key=f"book_{offer_id}_{idx}")
+            st.markdown(f"[🔗 Share this campaign](?campaign={offer_id})")
         if st.session_state.get(f"show_offer_{offer_id}"):
             _track("Offer_View", offer_id=offer_id, page=page_name, city=city)
             st.info(str(row.get("Full_Description", row.get("Long_Description", desc))))
             st.caption("Campaign performance is based on aggregate TripTrend activity and is not a guaranteed booking count.")
 
 
-def render_campaign_page() -> None:
+def render_campaign_page(public_offer_id: str = "") -> None:
     st.title("📣 Monthly Travel Offers & Campaigns")
     st.write("Discover current travel programs, services, creator campaigns, and city offers.")
     offers = _active_offers()
+    if public_offer_id:
+        offers = offers[offers.get("Offer_ID", pd.Series(dtype=str)).astype(str).eq(str(public_offer_id))]
+        if offers.empty:
+            st.warning("This campaign is no longer available or has not been published.")
+            return
+        st.info("Public campaign page — share this link on social media.")
+        _offer_card(offers.iloc[0], 0, page_name="Public Campaign")
+        return
     if offers.empty:
         st.info("No active offers are published yet. Be the first to create a campaign.")
     else:
@@ -178,7 +216,7 @@ def _render_campaign_form() -> None:
         email = st.text_input("Email")
         phone = st.text_input("Phone or WhatsApp")
         advertiser_type = st.selectbox("Advertiser type", ["Company", "Blogger", "Service", "Tour Guide", "Driver", "Hotel", "Other"])
-        campaign_type = st.selectbox("Campaign type", ["Tour Package", "Hotel Offer", "Travel Service", "Creator Campaign", "Seasonal Campaign","info & content ", "Other"])
+        campaign_type = st.selectbox("Campaign type", ["Tour Package", "Hotel Offer", "Travel Service", "Creator Campaign", "Seasonal Campaign", "Other"])
         title = st.text_input("Offer or campaign title *")
         city = st.text_input("City or destination")
         country = st.text_input("Country")

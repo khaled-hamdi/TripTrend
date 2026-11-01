@@ -17,7 +17,7 @@ from google_sheets_adapter import read_tab
 from triptrend_sheets_config import load_config_from_sheets
 from triptrend_import_to_sheets_v2 import prepare_import, apply_import, prepare_import_from_google_raw_tabs, repair_dates_from_workbook
 from campaign_features_v2 import render_campaign_page, render_creator_hub, render_contact_page
-from triptrend_new_features_v2 import (ensure_new_tabs, render_trip_planner, render_best_dates, render_advertiser_account_gate, render_advertiser_notice, render_targeted_widgets)
+from triptrend_new_features_v2 import (ensure_new_tabs, render_trip_planner, render_best_dates, render_advertiser_account_gate, render_advertiser_notice, render_targeted_widgets, render_events_explorer, render_contributor_area, _record_like, _records, _sheet_dates)
 from triptrend_admin_tools_v2 import render_content_admin
 from triptrend_external_data_v2 import external_cities, city_key, available_city_names, price_history_city_names
 
@@ -187,6 +187,9 @@ def find_column(df, possible_names):
 
 def try_parse_dates(series):
     parsed = pd.to_datetime(series, errors='coerce')
+    numeric = pd.to_numeric(series, errors='coerce')
+    serial = numeric.between(20000, 80000)
+    parsed.loc[serial] = pd.Timestamp('1899-12-30') + pd.to_timedelta(numeric[serial], unit='D')
     if parsed.isnull().all():
         try:
             current_year = datetime.now().year
@@ -222,8 +225,8 @@ def load_data_from_google_sheets(city_name, data_mode="All Data"):
     raw['Desc'] = raw.get('Description', '')
     raw['Desc2'] = ''
     raw['Distance From places'] = ''
-    raw['booking_dt'] = pd.to_datetime(raw.get('Booking_Date'), errors='coerce')
-    raw['arrival_dt'] = pd.to_datetime(raw.get('Arrival_Date'), errors='coerce')
+    raw['booking_dt'] = try_parse_dates(raw.get('Booking_Date'))
+    raw['arrival_dt'] = try_parse_dates(raw.get('Arrival_Date'))
     raw['day of arrival'] = raw['arrival_dt'].dt.day_name()
     raw['date of creat booking'] = raw['booking_dt']
     raw['start book'] = raw['booking_dt']
@@ -520,6 +523,14 @@ def main():
                 if st.button("Back to Public Mode"): st.session_state.admin_login_mode = False; st.rerun()
         return
 
+    public_campaign = str(st.query_params.get("campaign", "")).strip()
+    if public_campaign:
+        st.title("📣 TripTrend Campaign")
+        render_campaign_page(public_campaign)
+        if st.button("Back to TripTrend"):
+            st.query_params.clear(); st.rerun()
+        return
+
     page_map = {
         "planner": "🧳 Plan Your Trip", "best_dates": "📅 Best Dates & Booking Advice",
         "daily": "🏠 Daily Travel Pulse", "deals_events": "🎟️ Deals & Events",
@@ -586,12 +597,33 @@ def main():
         planner_city = st.selectbox("Destination", planner_options, key="planner_city")
         render_trip_planner(planner_city, load_data, data_mode, config)
 
+    elif selected_page == "🏠 Daily Travel Pulse":
+        st.title("🏠 Daily Travel Pulse")
+        pulse_city = st.selectbox("Destination", city_options, key="pulse_city")
+        pulse = _records("Daily_Travel_Pulse")
+        if not pulse.empty and "City" in pulse.columns:
+            pulse = pulse[pulse["City"].astype(str).map(normalize_city).eq(normalize_city(pulse_city))].copy()
+        if pulse.empty:
+            st.info("No Daily Travel Pulse has been published for this city yet.")
+        else:
+            date_col = next((c for c in ["Date", "Pulse_Date", "Updated_At"] if c in pulse.columns), None)
+            if date_col:
+                pulse["_date"] = _sheet_dates(pulse[date_col])
+                pulse = pulse.sort_values("_date", ascending=False)
+            row = pulse.iloc[0]
+            st.subheader(str(row.get("Headline", row.get("Title", f"Today's pulse for {pulse_city}"))))
+            for label, col in [("Hotels", "Hotel_Summary"), ("Weather", "Weather_Summary"), ("Currency", "Currency_Summary"), ("Events", "Event_Summary"), ("Flights", "Flight_Summary"), ("Travel tip", "Tip")]:
+                if str(row.get(col, "")).strip():
+                    st.info(f"**{label}:** {row.get(col)}")
+
     elif selected_page == "📅 Best Dates & Booking Advice":
         dates_city = st.selectbox("Destination", city_options, key="dates_city")
         render_best_dates(dates_city, load_data, data_mode)
 
     elif selected_page == "🎟️ Deals & Events":
         st.title("🎟️ Deals & Events")
+        render_events_explorer()
+        st.markdown("---")
         render_campaign_page()
 
     elif selected_page == "💼 Advertise":
@@ -603,11 +635,13 @@ def main():
     elif selected_page == "👥 Traveler Community":
         st.title("👥 Traveler Community")
         st.write("Share a useful experience, answer a traveler question, and build your contributor reputation.")
+        render_contributor_area()
+        st.markdown("---")
         render_creator_hub()
         st.subheader("Top Contributors")
         contributors = pd.DataFrame()
         try:
-            from triptrend_new_features import _records
+            from triptrend_new_features_v2 import _records
             contributors = _records("Contributors")
         except Exception:
             pass
