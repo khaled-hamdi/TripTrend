@@ -555,6 +555,24 @@ def main():
     if not city_options:
         city_options = list(CITIES_DATA.keys())
 
+    def city_cards(label: str, options, key: str):
+        """Mobile-friendly city selector with clickable destination cards."""
+        options = list(dict.fromkeys([str(x) for x in options if str(x).strip()]))
+        if not options:
+            return ''
+        current = st.session_state.get(key, options[0])
+        if current not in options:
+            current = options[0]
+        st.markdown(f"#### {label}")
+        cols = st.columns(min(4, len(options)))
+        for i, name in enumerate(options):
+            with cols[i % len(cols)]:
+                selected = name == current
+                if st.button(("✅ " if selected else "📍 ") + name, key=f"{key}_card_{i}", use_container_width=True):
+                    st.session_state[key] = name
+                    st.rerun()
+        return st.session_state.get(key, current)
+
     raw_allowed = st.session_state.allowed_pages
     nav_options = []
     if st.session_state.role == "admin" or "all" in [str(x).lower() for x in raw_allowed]:
@@ -586,7 +604,7 @@ def main():
 
     city = None
     if selected_page not in ["🌍 Compare Destinations", "⚙️ Admin Control Panel", "🎟️ Deals & Events", "💼 Advertise", "👥 Traveler Community", "🧳 Plan Your Trip", "📅 Best Dates & Booking Advice", "⭐ Hotel of the Day", "📣 Campaigns", "🎥 Creator Hub", "✉️ Contact & Feedback"]:
-        city = st.selectbox("Select City", city_options, key=f"page_city_{selected_page}")
+        city = city_cards("Select City", city_options, f"page_city_{selected_page}")
         st.sidebar.subheader("📥 Data Export")
         with st.sidebar.expander("Protected Download"):
             code = st.text_input("Enter Download Code", type="password")
@@ -600,12 +618,12 @@ def main():
     # --- PAGES ---
     if selected_page == "🧳 Plan Your Trip":
         planner_options = city_options
-        planner_city = st.selectbox("Destination", planner_options, key="planner_city")
+        planner_city = city_cards("Destination", planner_options, "planner_city")
         render_trip_planner(planner_city, load_data, data_mode, config)
 
     elif selected_page == "🏠 Daily Travel Pulse":
         st.title("🏠 Daily Travel Pulse")
-        pulse_city = st.selectbox("Destination", city_options, key="pulse_city")
+        pulse_city = city_cards("Destination", city_options, "pulse_city")
         pulse = _records("Daily_Travel_Pulse")
         if not pulse.empty and "City" in pulse.columns:
             pulse = pulse[pulse["City"].astype(str).map(normalize_city).eq(normalize_city(pulse_city))].copy()
@@ -623,7 +641,7 @@ def main():
                     st.info(f"**{label}:** {row.get(col)}")
 
     elif selected_page == "📅 Best Dates & Booking Advice":
-        dates_city = st.selectbox("Destination", city_options, key="dates_city")
+        dates_city = city_cards("Destination", city_options, "dates_city")
         render_best_dates(dates_city, load_data, data_mode)
 
     elif selected_page == "🎟️ Deals & Events":
@@ -647,7 +665,6 @@ def main():
         st.subheader("Top Contributors")
         contributors = pd.DataFrame()
         try:
-            from triptrend_new_features_v2 import _records
             contributors = _records("Contributors")
         except Exception:
             pass
@@ -710,7 +727,7 @@ def main():
 
     elif selected_page == "⭐ Hotel of the Day":
         st.title("⭐ Hotel of the Day")
-        city_for_deal = st.selectbox("Select City for Deals", city_options)
+        city_for_deal = city_cards("Select City for Deals", city_options, "hotel_day_city")
         df, col_map, err = load_data(city_for_deal, data_mode)
         if df is not None and not df.empty:
             eligible = df[pd.to_numeric(df.get('Best_Price'), errors='coerce').gt(0)].copy()
@@ -727,7 +744,9 @@ def main():
                 st.markdown(f"<h2 style='text-align: center;'>🏨 {best_deal[col_map['Hotel']]}</h2>", unsafe_allow_html=True)
                 c1, c2, c3 = st.columns(3)
                 c1.metric("Rating", f"{best_deal['Rate_Val']}/10")
-                c2.metric("Stars", f"{int(best_deal['Star'])} ⭐")
+                stars_value = pd.to_numeric(best_deal.get('Star'), errors='coerce')
+                stars_text = f"{int(stars_value)} ⭐" if pd.notna(stars_value) else "Not available"
+                c2.metric("Stars", stars_text)
                 c3.metric("Current Price", f"${best_deal['Best_Price']:.0f}")
                 if col_map.get("Note2") in best_deal.index and str(best_deal.get(col_map["Note2"], "")).strip(): st.caption(f"🏷️ Offer: {best_deal.get(col_map['Note2'])}")
                 st.markdown("---")
