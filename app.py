@@ -15,7 +15,13 @@ import hashlib
 from triptrend_data_engine import normalize_city
 from google_sheets_adapter import read_tab
 from triptrend_sheets_config import load_config_from_sheets
-from triptrend_import_to_sheets_v2 import prepare_import, apply_import, prepare_import_from_google_raw_tabs, repair_dates_from_workbook
+from triptrend_import_to_sheets_v2 import prepare_import, apply_import, prepare_import_from_google_raw_tabs
+try:
+    from triptrend_import_to_sheets_v2 import repair_dates_from_workbook
+except ImportError:
+    # Keeps the application bootable if an older helper file is still cached
+    # in the repository; the full helper is included in the current package.
+    repair_dates_from_workbook = None
 from campaign_features_v2 import render_campaign_page, render_creator_hub, render_contact_page
 from triptrend_new_features_v2 import (ensure_new_tabs, render_trip_planner, render_best_dates, render_advertiser_account_gate, render_advertiser_notice, render_targeted_widgets, render_events_explorer, render_contributor_area, _record_like, _records, _sheet_dates)
 from triptrend_admin_tools_v2 import render_content_admin
@@ -806,6 +812,8 @@ def main():
                 repair_path.write(repair_file.getvalue())
                 repair_path.close()
                 try:
+                    if repair_dates_from_workbook is None:
+                        raise RuntimeError('The uploaded triptrend_import_to_sheets_v2.py is outdated. Replace it with the file from the TripTrend V3 package, then reboot Streamlit.')
                     repair_result = repair_dates_from_workbook(repair_path.name)
                     st.cache_data.clear()
                     st.success(f"Date repair completed: {repair_result['updated']} rows updated.")
