@@ -24,6 +24,20 @@ def _set_status(tab, row_index, status):
     return True
 
 
+def _is_pending(value) -> bool:
+    """Recognize the status labels used by forms and legacy Sheets tabs."""
+    normalized = str(value or '').strip().casefold()
+    return normalized in {'', 'new', 'pending', 'pending review', 'submitted', 'awaiting approval', 'under review'} or 'pending' in normalized or 'review' in normalized
+
+
+def _row_label(row, tab: str) -> str:
+    for field in ('Title', 'Offer_Title', 'Campaign_Name', 'Subject', 'Short title', 'Question', 'Comment', 'Message', 'Partner_Name', 'Advertiser_Name', 'Contributor_Name', 'Display_Name', 'Name'):
+        value = str(row.get(field, '')).strip()
+        if value:
+            return value[:90]
+    return f'{tab} submission'
+
+
 def render_content_admin():
     st.subheader("🧩 Content, Events, Experiences & Partners")
     st.caption("Manage the new travel data from the Admin Panel. Google Sheets remains the backend; no manual sheet editing is required.")
@@ -101,8 +115,19 @@ def render_content_admin():
         if contributors.empty: st.info("No contributors yet.")
         else: st.dataframe(contributors.sort_values("Points", ascending=False), hide_index=True, use_container_width=True)
     with tabs[4]:
-        st.caption("Review visitor-submitted content here. Select a row, then approve or reject it.")
-        for tab in ["Campaign_Requests", "Feedback_Messages", "Travel_Experiences"]:
+        st.caption("Review visitor-submitted content here. Select a pending row, then approve or reject it. Changes are written to Google Sheets immediately.")
+        moderation_tabs = [
+            "Campaign_Requests", "Travel_Experiences", "Feedback_Messages",
+            "Traveler_Questions", "Contributor_Answers", "Advertisements",
+            "Travel_Offers", "Creator_Offers", "Affiliate_Widgets",
+        ]
+        pending_total = 0
+        for tab in moderation_tabs:
+            records = _records(tab)
+            if not records.empty and 'Status' in records.columns:
+                pending_total += int(records['Status'].map(_is_pending).sum())
+        st.metric("Pending items awaiting review", pending_total)
+        for tab in moderation_tabs:
             st.markdown(f"**{tab}**")
             records = _records(tab)
             if records.empty: st.info("No records.")
@@ -110,18 +135,19 @@ def render_content_admin():
                 view = records.tail(50).copy()
                 st.dataframe(view, hide_index=True, use_container_width=True)
                 if 'Status' in view.columns:
-                    pending = view[view['Status'].astype(str).str.lower().isin(['new', 'pending', 'submitted', ''])]
+                    pending = view[view['Status'].map(_is_pending)]
                     if not pending.empty:
                         choices = {}
                         for idx, row in pending.iterrows():
-                            label = str(row.get('Name', row.get('Offer_Title', row.get('Campaign_Name', 'Submission'))))[:80]
-                            choices[f"{idx}: {label}"] = idx
+                            choices[f"{idx}: {_row_label(row, tab)}"] = idx
                         selected = st.selectbox(f"Select pending {tab} row", list(choices), key=f"moderate_{tab}")
                         idx = choices[selected]
                         c1, c2 = st.columns(2)
                         if c1.button(f"✅ Approve {tab}", key=f"approve_{tab}"):
                             if _set_status(tab, idx, 'Approved'):
-                                st.success('Approved.'); st.cache_data.clear(); st.rerun()
+                                st.success(f'{tab} item approved.'); st.cache_data.clear(); st.rerun()
                         if c2.button(f"❌ Reject {tab}", key=f"reject_{tab}"):
                             if _set_status(tab, idx, 'Rejected'):
-                                st.warning('Rejected.'); st.cache_data.clear(); st.rerun()
+                                st.warning(f'{tab} item rejected.'); st.cache_data.clear(); st.rerun()
+                    else:
+                        st.caption("No pending items in this tab.")
