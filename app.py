@@ -43,6 +43,25 @@ def sheets_configured():
         return False
 APP_VERSION = "Ver 2.0"
 
+LANGUAGE_OPTIONS = {"English": "en", "العربية": "ar", "Français": "fr"}
+TRANSLATIONS = {
+    "Data scope": {"ar": "نطاق البيانات", "fr": "Périmètre des données"},
+    "Choose the records used on this page": {"ar": "اختر السجلات المستخدمة في هذه الصفحة", "fr": "Choisissez les données utilisées sur cette page"},
+    "Select City": {"ar": "اختر المدينة", "fr": "Choisir la ville"},
+    "Destination": {"ar": "الوجهة", "fr": "Destination"},
+    "No Daily Travel Pulse has been published for this city yet.": {"ar": "لم يتم نشر نبض السفر اليومي لهذه المدينة حتى الآن.", "fr": "Aucun bulletin de voyage quotidien n’est encore publié pour cette ville."},
+    "Travel tip": {"ar": "نصيحة سفر", "fr": "Conseil de voyage"},
+    "Hotels": {"ar": "الفنادق", "fr": "Hôtels"},
+    "Weather": {"ar": "الطقس", "fr": "Météo"},
+    "Currency": {"ar": "العملة", "fr": "Devise"},
+    "Events": {"ar": "الأحداث", "fr": "Événements"},
+    "Flights": {"ar": "الطيران", "fr": "Vols"},
+}
+
+def tr(text: str) -> str:
+    lang = st.session_state.get("language_code", "en")
+    return TRANSLATIONS.get(text, {}).get(lang, text)
+
 def get_default_config():
     return {
         "_settings": {"public_access": True, "default_landing_page": "🧳 Plan Your Trip", "download_code": "premium2026"},
@@ -203,20 +222,18 @@ def try_parse_dates(series):
         except: pass
     return parsed
 
-@st.cache_data(ttl=120, show_spinner=False)
-def load_data_from_google_sheets(city_name, data_mode="All Data"):
-    rows = read_tab('Price_History')
+@st.cache_data(ttl=300, show_spinner=False)
+def _load_all_price_history_from_google_sheets():
+    """Read and normalize Price_History once; page calls only filter the cached frame."""
+    rows = read_tab('Price_History', range_end='V')
     if not rows or len(rows) < 2:
-        return None, None, 'Price_History is empty.'
+        return pd.DataFrame(), 'Price_History is empty.'
     headers = [str(x).strip() for x in rows[0]]
     width = len(headers)
     raw = pd.DataFrame([(list(r) + [''] * width)[:width] for r in rows[1:]], columns=headers)
     raw = raw.loc[:, ~raw.columns.duplicated()].copy()
     if 'City' not in raw.columns:
-        return None, None, 'Price_History is missing City.'
-    raw = raw[raw['City'].map(normalize_city) == normalize_city(city_name)].copy()
-    if raw.empty:
-        return None, None, f'No records found for {city_name} in Price_History.'
+        return pd.DataFrame(), 'Price_History is missing City.'
     raw['Hotel_Name'] = raw.get('Source_Hotel_Name', '')
     raw['Rate'] = raw.get('Rate', np.nan)
     raw['Star'] = raw.get('Stars', np.nan)
@@ -244,7 +261,17 @@ def load_data_from_google_sheets(city_name, data_mode="All Data"):
     raw['Rate_Val'] = raw['Rate'].fillna(0)
     raw['Value_Score'] = raw['Rate_Val'] / raw['Best_Price'].replace(0, np.nan)
     col_map = {'Hotel':'Hotel_Name','Rate':'Rate','Star':'Star','P1':'Price1','P2':'price2','P3':'price3','Place1':'Place1','Place2':'place2','Place3':'place3','ArrivalDay':'day of arrival','BookingDate':'date of creat booking','Desc':'Desc','Location':'location','Dist':'Distance From places'}
-    if data_mode == 'Latest Snapshot Only' and 'Import_Date' in raw.columns:
+    return raw, col_map, None
+
+@st.cache_data(ttl=300, show_spinner=False)
+def load_data_from_google_sheets(city_name, data_mode="All Data"):
+    raw, col_map, error = _load_all_price_history_from_google_sheets()
+    if error:
+        return None, None, error
+    raw = raw[raw['City'].map(normalize_city) == normalize_city(city_name)].copy()
+    if raw.empty:
+        return None, None, f'No records found for {city_name} in Price_History.'
+    if data_mode == "Latest Snapshot Only" and 'Import_Date' in raw.columns:
         latest = raw['Import_Date'].astype(str).max()
         raw = raw[raw['Import_Date'].astype(str) == latest].copy()
     return raw, col_map, None
@@ -563,7 +590,7 @@ def main():
         current = st.session_state.get(key, options[0])
         if current not in options:
             current = options[0]
-        st.markdown(f"#### {label}")
+        st.markdown(f"#### {tr(label)}")
         cols = st.columns(min(4, len(options)))
         for i, name in enumerate(options):
             with cols[i % len(cols)]:
@@ -590,6 +617,13 @@ def main():
     track_page_view(selected_page)
 
     st.sidebar.title(f"🚀 {st.session_state.username}")
+    language_name = st.sidebar.selectbox(
+        "🌐 Language / اللغة / Langue",
+        list(LANGUAGE_OPTIONS.keys()),
+        index=list(LANGUAGE_OPTIONS.values()).index(st.session_state.get("language_code", "en")),
+        key="language_name",
+    )
+    st.session_state["language_code"] = LANGUAGE_OPTIONS[language_name]
     if st.session_state.get("is_public", False): 
         if st.sidebar.button("🔐 Admin Login"):
             st.session_state.logged_in, st.session_state.is_public, st.session_state.admin_login_mode = False, False, True
@@ -597,8 +631,8 @@ def main():
     
     # Page-level data mode selector: kept in the content area so visitors can see the active scope.
     st.session_state.setdefault("global_data_mode", "Latest Snapshot Only")
-    st.markdown("### Data scope")
-    data_mode = st.radio("Choose the records used on this page", ["Latest Snapshot Only", "All Recorded Data"], horizontal=True, index=0, key="global_data_mode")
+    st.markdown(f"### {tr('Data scope')}")
+    data_mode = st.radio(tr("Choose the records used on this page"), ["Latest Snapshot Only", "All Recorded Data"], horizontal=True, index=0, key="global_data_mode")
     
     render_vip_banner(config)
 
@@ -622,13 +656,13 @@ def main():
         render_trip_planner(planner_city, load_data, data_mode, config)
 
     elif selected_page == "🏠 Daily Travel Pulse":
-        st.title("🏠 Daily Travel Pulse")
+        st.title("🏠 Daily Travel Pulse / نبض السفر اليومي / Bulletin quotidien")
         pulse_city = city_cards("Destination", city_options, "pulse_city")
         pulse = _records("Daily_Travel_Pulse")
         if not pulse.empty and "City" in pulse.columns:
             pulse = pulse[pulse["City"].astype(str).map(normalize_city).eq(normalize_city(pulse_city))].copy()
         if pulse.empty:
-            st.info("No Daily Travel Pulse has been published for this city yet.")
+            st.info(tr("No Daily Travel Pulse has been published for this city yet."))
         else:
             date_col = next((c for c in ["Date", "Pulse_Date", "Updated_At"] if c in pulse.columns), None)
             if date_col:
@@ -638,7 +672,7 @@ def main():
             st.subheader(str(row.get("Headline", row.get("Title", f"Today's pulse for {pulse_city}"))))
             for label, col in [("Hotels", "Hotel_Summary"), ("Weather", "Weather_Summary"), ("Currency", "Currency_Summary"), ("Events", "Event_Summary"), ("Flights", "Flight_Summary"), ("Travel tip", "Tip")]:
                 if str(row.get(col, "")).strip():
-                    st.info(f"**{label}:** {row.get(col)}")
+                    st.info(f"**{tr(label)}:** {row.get(col)}")
 
     elif selected_page == "📅 Best Dates & Booking Advice":
         dates_city = city_cards("Destination", city_options, "dates_city")

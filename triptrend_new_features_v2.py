@@ -202,7 +202,7 @@ def _record_like(item_id: str, page: str, city: str = "") -> bool:
         contributor_id = st.session_state.get("contributor_id", "")
         if contributor_id:
             append_rows("Contributor_Points_Log", [[uuid.uuid4().hex, contributor_id, "Like", item_id, 1, "Approved", "Useful community interaction", now.strftime("%Y-%m-%d %H:%M:%S"), "system"]], headers=NEW_TAB_HEADERS["Contributor_Points_Log"])
-        st.cache_data.clear()
+        _records.clear()
         return True
     except Exception:
         return False
@@ -254,7 +254,7 @@ def render_contributor_area(city: str = ""):
                 eid = f"EXP-{uuid.uuid4().hex[:10]}"
                 append_rows("Travel_Experiences", [[eid, st.session_state["contributor_id"], st.session_state.get("contributor_name", "Traveler"), exp_city, "", kind, title, comment, score, "/10", datetime.now().strftime("%Y-%m-%d"), datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "Pending Review", 0, ""]], headers=NEW_TAB_HEADERS["Travel_Experiences"])
                 append_rows("Contributor_Points_Log", [[uuid.uuid4().hex, st.session_state["contributor_id"], "Experience", eid, 1, "Pending", "Submitted travel experience", datetime.now().strftime("%Y-%m-%d %H:%M:%S"), ""]], headers=NEW_TAB_HEADERS["Contributor_Points_Log"])
-                st.cache_data.clear(); st.success("Submitted for admin review. You earned a pending contribution point.")
+                _records.clear(); st.success("Submitted for admin review. You earned a pending contribution point.")
 
 
 def render_trip_planner(city: str, data_loader, data_mode: str, config: dict):
@@ -430,9 +430,16 @@ def render_best_dates(city: str, data_loader, data_mode: str):
         st.subheader("Booking Window")
         if not window.empty:
             best = window['mean'].idxmin()
-            low = valid[valid["Booking Window"] == best]["_price"].min()
-            high = valid[valid["Booking Window"] == best]["_price"].max()
-            st.info(f"Best observed booking window: **{best} days before arrival**. Historical expected range for this window: **${low:,.0f}–${high:,.0f}**. This is not a guaranteed future price.")
+            window_prices = valid.loc[valid["Booking Window"] == best, "_price"].dropna()
+            sample_size = len(window_prices)
+            if sample_size >= 5:
+                low = window_prices.quantile(0.25)
+                high = window_prices.quantile(0.75)
+                median = window_prices.median()
+                range_text = f"${low:,.0f}–${high:,.0f}"
+                st.info(f"Best observed booking window: **{best} days before arrival**. Typical historical range: **{range_text}** · Median: **${median:,.0f}** · Based on **{sample_size} records**. This is not a guaranteed future price.")
+            else:
+                st.info(f"Best observed booking window: **{best} days before arrival**. Only **{sample_size} records** are available, so a reliable price range is not shown yet. This is not a guaranteed future price.")
             st.dataframe(window.reset_index().rename(columns={"mean": "Average Price", "count": "Records"}).round(0), hide_index=True, use_container_width=True)
     st.subheader("Golden Window & Move Your Trip")
     if len(by_day) >= 3:
