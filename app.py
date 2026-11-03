@@ -23,7 +23,7 @@ except ImportError:
     # in the repository; the full helper is included in the current package.
     repair_dates_from_workbook = None
 from campaign_features_v2 import render_campaign_page, render_creator_hub, render_contact_page
-from triptrend_new_features_v2 import (ensure_new_tabs, render_trip_planner, render_best_dates, render_advertiser_account_gate, render_advertiser_notice, render_targeted_widgets, render_events_explorer, render_contributor_area, _record_like, _records, _sheet_dates)
+from triptrend_new_features_v2 import (ensure_new_tabs, render_trip_planner, render_best_dates, render_advertiser_account_gate, render_advertiser_notice, render_targeted_widgets, render_events_explorer, render_contributor_area, render_approved_experiences, _record_like, _records, _sheet_dates)
 from triptrend_admin_tools_v2 import render_content_admin
 from triptrend_external_data_v2 import external_cities, city_key, available_city_names, price_history_city_names
 
@@ -694,6 +694,10 @@ def main():
         st.title("👥 Traveler Community")
         st.write("Share a useful experience, answer a traveler question, and build your contributor reputation.")
         render_contributor_area()
+        st.markdown("---")
+        st.subheader("✅ Approved Traveler Experiences")
+        community_city = city_cards("Filter by destination (optional)", ["All destinations"] + city_options, "community_city")
+        render_approved_experiences("" if community_city == "All destinations" else community_city)
         st.markdown("---")
         render_creator_hub()
         st.subheader("Top Contributors")

@@ -8,7 +8,7 @@ import pandas as pd
 import streamlit as st
 
 from google_sheets_adapter import read_tab, append_rows, ensure_tab
-from triptrend_external_data_v2 import external_events, city_prices, external_weather, external_currency, external_flights, city_key
+from triptrend_external_data_v2 import external_events, city_prices, external_weather, external_currency, external_flights, city_key, price_history_city_names, external_cities
 
 # These tabs are created automatically if the connected native Google Sheet is missing them.
 NEW_TAB_HEADERS = {
@@ -241,20 +241,48 @@ def render_contributor_area(city: str = ""):
                             st.success("Logged in as contributor.")
                         else: st.error("Invalid contributor credentials.")
     if st.session_state.get("contributor_id"):
+        city_options = price_history_city_names() or external_cities()
+        city_options = list(dict.fromkeys([str(x).strip() for x in city_options if str(x).strip()]))
+        general_label = "General / All cities"
+        form_city_options = [general_label] + city_options
+        default_city = city if city in city_options else general_label
         with st.form("public_experience_form"):
-            exp_city = st.text_input("City", value=city)
+            selected_city = st.selectbox("City (optional)", form_city_options, index=form_city_options.index(default_city) if default_city in form_city_options else 0)
+            exp_city = "" if selected_city == general_label else selected_city
             kind = st.selectbox("Topic", ["Hotel", "Flight", "Prices", "Food", "Weather", "Transport", "Event", "Tour Guide", "Driver", "Other"])
             score = st.slider("Your rating", 1, 10, 8)
             title = st.text_input("Short title")
             comment = st.text_area("Your experience")
             submitted = st.form_submit_button("Publish for review")
         if submitted:
-            if not exp_city.strip() or not comment.strip(): st.error("City and experience are required.")
+            if not comment.strip(): st.error("Your experience is required.")
             else:
                 eid = f"EXP-{uuid.uuid4().hex[:10]}"
                 append_rows("Travel_Experiences", [[eid, st.session_state["contributor_id"], st.session_state.get("contributor_name", "Traveler"), exp_city, "", kind, title, comment, score, "/10", datetime.now().strftime("%Y-%m-%d"), datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "Pending Review", 0, ""]], headers=NEW_TAB_HEADERS["Travel_Experiences"])
                 append_rows("Contributor_Points_Log", [[uuid.uuid4().hex, st.session_state["contributor_id"], "Experience", eid, 1, "Pending", "Submitted travel experience", datetime.now().strftime("%Y-%m-%d %H:%M:%S"), ""]], headers=NEW_TAB_HEADERS["Contributor_Points_Log"])
                 _records.clear(); st.success("Submitted for admin review. You earned a pending contribution point.")
+
+
+def render_approved_experiences(city: str = "", limit: int = 20):
+    """Display only approved visitor experiences, optionally filtered by canonical city."""
+    exp = _records("Travel_Experiences")
+    if exp.empty:
+        st.info("No approved traveler experiences are available yet.")
+        return
+    if "Status" in exp.columns:
+        exp = exp[exp["Status"].astype(str).str.casefold().isin(["approved", "active", "featured"])].copy()
+    if city and "City" in exp.columns:
+        exp = exp[exp["City"].astype(str).map(city_key).eq(city_key(city))].copy()
+    if exp.empty:
+        st.info("No approved traveler experiences are available for this destination yet.")
+        return
+    for i, (_, row) in enumerate(exp.tail(limit).iloc[::-1].iterrows()):
+        with st.container(border=True):
+            author = row.get("Contributor_Name", "Traveler")
+            title = row.get("Title", "Travel experience")
+            st.markdown(f"**{title}** · {author}")
+            st.write(str(row.get("Comment", "")))
+            st.caption(f"{row.get('Experience_Type', 'Travel experience')} · {row.get('City') or 'All cities'} · {row.get('Experience_Date', row.get('Submitted_At', ''))}")
 
 
 def render_trip_planner(city: str, data_loader, data_mode: str, config: dict):
@@ -373,12 +401,13 @@ def render_trip_planner(city: str, data_loader, data_mode: str, config: dict):
 
     exp = _records("Travel_Experiences")
     if not exp.empty and "City" in exp.columns:
-        exp = exp[exp["City"].astype(str).str.casefold().eq(city.casefold())]
+        exp = exp[exp["City"].astype(str).map(city_key).isin(["", city_key(city)])]
+    if not exp.empty and "Status" in exp.columns:
+        exp = exp[exp["Status"].astype(str).str.casefold().isin(["approved", "active", "featured"])]
     st.subheader("👥 Traveler Experiences")
     if exp.empty:
         st.info("No approved traveler experiences are available yet.")
     else:
-        exp = exp[exp.get("Status", pd.Series("Approved", index=exp.index)).astype(str).str.lower().isin(["approved", "active", "featured"])]
         for i, (_, row) in enumerate(exp.head(10).iterrows()):
             with st.container(border=True):
                 st.markdown(f"**{row.get('Contributor_Name', 'Traveler')}** · {row.get('Experience_Date', row.get('Submitted_At', ''))}")
