@@ -13,7 +13,7 @@ import io
 import hmac
 import hashlib
 from triptrend_data_engine import normalize_city
-from google_sheets_adapter import read_tab
+from google_sheets_adapter import read_tab, append_rows
 from triptrend_sheets_config import load_config_from_sheets
 from triptrend_import_to_sheets_v2 import prepare_import, apply_import, prepare_import_from_google_raw_tabs
 try:
@@ -42,6 +42,7 @@ def sheets_configured():
     except Exception:
         return False
 APP_VERSION = "Ver 2.0"
+VISIT_HEADERS = ["Visit_ID", "Visit_Date", "Visit_Time", "Session_ID", "Username", "Page_Name", "Visit_Type"]
 
 LANGUAGE_OPTIONS = {"English": "en", "العربية": "ar", "Français": "fr"}
 TRANSLATIONS = {
@@ -102,16 +103,43 @@ def save_config(config):
             json.dump(config, f, indent=4, ensure_ascii=False)
     except: pass
 
+def _visitor_session_id():
+    if not st.session_state.get("visitor_session_id"):
+        st.session_state["visitor_session_id"] = hashlib.sha256(
+            f"{datetime.now().timestamp()}-{random.random()}".encode()
+        ).hexdigest()[:24]
+    return st.session_state["visitor_session_id"]
+
+
 def track_page_view(page_name):
-    config = load_config()
-    today = datetime.now().strftime("%Y-%m-%d")
-    stats = config.setdefault("_stats", {"daily": {}, "total": {}})
-    daily = stats.setdefault("daily", {})
-    day_stats = daily.setdefault(today, {})
-    day_stats[page_name] = day_stats.get(page_name, 0) + 1
-    total = stats.setdefault("total", {})
-    total[page_name] = total.get(page_name, 0) + 1
-    save_config(config)
+    """Record one page view per page/session and persist it in Google Sheets.
+
+    Streamlit reruns the script frequently, so an in-session guard prevents a
+    refresh/rerun from inflating the visitor count. A new incognito session gets
+    a new Session_ID and is counted as a new unique visitor.
+    """
+    session_id = _visitor_session_id()
+    seen = st.session_state.setdefault("tracked_pages_this_session", set())
+    key = str(page_name)
+    if key in seen:
+        return
+    seen.add(key)
+    now = datetime.now()
+    row = [
+        f"VIS-{hashlib.sha256(f'{session_id}-{key}'.encode()).hexdigest()[:16]}",
+        now.strftime("%Y-%m-%d"), now.strftime("%H:%M:%S"), session_id,
+        st.session_state.get("username", "Guest"), key, "Page View",
+    ]
+    try:
+        append_rows("Visitor_Analytics", [row], headers=VISIT_HEADERS)
+    except Exception:
+        # Keep the public site usable if the analytics tab/API is unavailable.
+        config = load_config()
+        today = now.strftime("%Y-%m-%d")
+        stats = config.setdefault("_stats", {"daily": {}, "total": {}})
+        stats.setdefault("daily", {}).setdefault(today, {})[key] = stats.setdefault("daily", {}).setdefault(today, {}).get(key, 0) + 1
+        stats.setdefault("total", {})[key] = stats.setdefault("total", {}).get(key, 0) + 1
+        save_config(config)
 
 def update_last_login(username):
     config = load_config()
@@ -825,13 +853,35 @@ def main():
             settings["default_landing_page"] = st.selectbox("Landing Page", landing_options, index=landing_options.index(configured_landing))
             if st.button("Save Settings"): config["_settings"] = settings; save_config(config); st.success("Updated!"); st.rerun()
         with tab3:
-            stats = config.get("_stats", {"daily": {}, "total": {}})
-            summary = []
-            for p in page_map.values():
-                summary.append({"Page": p, "Today": stats["daily"].get(datetime.now().strftime("%Y-%m-%d"), {}).get(p, 0), "Yesterday": stats["daily"].get((datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d"), {}).get(p, 0), "Total": stats["total"].get(p, 0)})
-            df_summary = pd.DataFrame(summary)
+            analytics_rows = read_tab("Visitor_Analytics", range_end="G")
+            analytics = pd.DataFrame()
+            if analytics_rows and len(analytics_rows) > 1:
+                headers = [str(x).strip() for x in analytics_rows[0]]
+                width = len(headers)
+                analytics = pd.DataFrame([(list(r) + [""] * width)[:width] for r in analytics_rows[1:]], columns=headers)
+            today_text = datetime.now().strftime("%Y-%m-%d")
+            yesterday_text = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+            if not analytics.empty and {"Visit_Date", "Session_ID", "Page_Name"}.issubset(analytics.columns):
+                today_rows = analytics[analytics["Visit_Date"].astype(str).eq(today_text)]
+                yesterday_rows = analytics[analytics["Visit_Date"].astype(str).eq(yesterday_text)]
+                st.subheader("Visitor analytics")
+                m1, m2, m3 = st.columns(3)
+                m1.metric("Unique visitors today", today_rows["Session_ID"].nunique())
+                m2.metric("Page views today", len(today_rows))
+                m3.metric("Unique visitors total", analytics["Session_ID"].nunique())
+                summary = []
+                for p in page_map.values():
+                    p_rows = analytics[analytics["Page_Name"].astype(str).eq(p)]
+                    summary.append({"Page": p, "Today": int((p_rows["Visit_Date"].astype(str) == today_text).sum()), "Yesterday": int((p_rows["Visit_Date"].astype(str) == yesterday_text).sum()), "Total Page Views": len(p_rows), "Unique Visitors": p_rows["Session_ID"].nunique()})
+                df_summary = pd.DataFrame(summary)
+            else:
+                stats = config.get("_stats", {"daily": {}, "total": {}})
+                summary = []
+                for p in page_map.values():
+                    summary.append({"Page": p, "Today": stats["daily"].get(today_text, {}).get(p, 0), "Yesterday": stats["daily"].get(yesterday_text, {}).get(p, 0), "Total Page Views": stats["total"].get(p, 0), "Unique Visitors": "—"})
+                df_summary = pd.DataFrame(summary)
             if not df_summary.empty:
-                totals = pd.DataFrame([{"Page": "🏁 TOTAL", "Today": df_summary["Today"].sum(), "Yesterday": df_summary["Yesterday"].sum(), "Total": df_summary["Total"].sum()}])
+                totals = pd.DataFrame([{"Page": "🏁 TOTAL", "Today": df_summary["Today"].sum(), "Yesterday": df_summary["Yesterday"].sum(), "Total Page Views": df_summary["Total Page Views"].sum(), "Unique Visitors": analytics["Session_ID"].nunique() if not analytics.empty else "—"}])
                 df_summary = pd.concat([df_summary, totals], ignore_index=True)
             st.dataframe(df_summary, hide_index=True, use_container_width=True)
         with tab4:
