@@ -23,7 +23,9 @@ NEW_TAB_HEADERS = {
 }
 
 
+@st.cache_data(ttl=600, show_spinner=False)
 def ensure_new_tabs():
+    """Check/create optional tabs at most once every ten minutes per app worker."""
     for tab, headers in NEW_TAB_HEADERS.items():
         try:
             ensure_tab(tab, headers)

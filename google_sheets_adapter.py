@@ -92,12 +92,12 @@ def ensure_tab(tab_name: str, headers: Sequence | None = None):
         current = []
         try:
             current = _service().spreadsheets().values().get(
-                spreadsheetId=spreadsheet_id(), range=f"'{tab_name}'!A1:A1",
+                spreadsheetId=spreadsheet_id(), range=f"'{tab_name}'!A1:Z1",
                 majorDimension='ROWS', valueRenderOption='UNFORMATTED_VALUE'
             ).execute().get('values', [])
         except Exception:
             current = []
-        if not current:
+        if not current or len(current[0]) < len(headers):
             _service().spreadsheets().values().update(
                 spreadsheetId=spreadsheet_id(),
                 range=f"'{tab_name}'!A1",

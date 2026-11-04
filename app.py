@@ -42,7 +42,7 @@ def sheets_configured():
     except Exception:
         return False
 APP_VERSION = "Ver 2.0"
-VISIT_HEADERS = ["Visit_ID", "Visit_Date", "Visit_Time", "Session_ID", "Username", "Page_Name", "Visit_Type"]
+VISIT_HEADERS = ["Visit_ID", "Visit_Date", "Visit_Time", "Session_ID", "Username", "Page_Name", "Visit_Type", "Traffic_Source", "UTM_Source", "UTM_Medium", "UTM_Campaign", "Referrer"]
 
 LANGUAGE_OPTIONS = {"English": "en", "العربية": "ar", "Français": "fr"}
 TRANSLATIONS = {
@@ -111,6 +111,20 @@ def _visitor_session_id():
     return st.session_state["visitor_session_id"]
 
 
+def _traffic_source():
+    """Read UTM campaign tags and classify the visit for marketing reports."""
+    try:
+        params = st.query_params
+        utm_source = str(params.get("utm_source", "")).strip()
+        utm_medium = str(params.get("utm_medium", "")).strip()
+        utm_campaign = str(params.get("utm_campaign", "")).strip()
+        referrer = str(params.get("ref", "")).strip()
+    except Exception:
+        utm_source = utm_medium = utm_campaign = referrer = ""
+    source = utm_source or referrer or "Direct"
+    return source, utm_source, utm_medium, utm_campaign, referrer
+
+
 def track_page_view(page_name):
     """Record one page view per page/session and persist it in Google Sheets.
 
@@ -125,10 +139,12 @@ def track_page_view(page_name):
         return
     seen.add(key)
     now = datetime.now()
+    source, utm_source, utm_medium, utm_campaign, referrer = _traffic_source()
     row = [
         f"VIS-{hashlib.sha256(f'{session_id}-{key}'.encode()).hexdigest()[:16]}",
         now.strftime("%Y-%m-%d"), now.strftime("%H:%M:%S"), session_id,
-        st.session_state.get("username", "Guest"), key, "Page View",
+        st.session_state.get("username", "Guest"), key, "Page View", source,
+        utm_source, utm_medium, utm_campaign, referrer,
     ]
     try:
         append_rows("Visitor_Analytics", [row], headers=VISIT_HEADERS)
@@ -146,7 +162,7 @@ def track_page_view(page_name):
 def _visitor_counts():
     """Return stable visitor/page-view counts for the public counter and admin."""
     try:
-        rows = read_tab("Visitor_Analytics", range_end="G")
+        rows = read_tab("Visitor_Analytics", range_end="L")
     except Exception:
         return {"today": 0, "yesterday": 0, "total": 0, "views_today": 0}
     if not rows or len(rows) < 2:
@@ -901,7 +917,7 @@ def main():
             if st.button("Save Settings"): config["_settings"] = settings; save_config(config); st.success("Updated!"); st.rerun()
         with tab3:
             try:
-                analytics_rows = read_tab("Visitor_Analytics", range_end="G")
+                analytics_rows = read_tab("Visitor_Analytics", range_end="L")
             except Exception as exc:
                 analytics_rows = []
                 st.info("Visitor analytics will appear after the first public visit. The Visitor_Analytics tab could not be read yet.")
@@ -921,6 +937,12 @@ def main():
                 m1.metric("Unique visitors today", today_rows["Session_ID"].nunique())
                 m2.metric("Page views today", len(today_rows))
                 m3.metric("Unique visitors total", analytics["Session_ID"].nunique())
+                if "Traffic_Source" in analytics.columns:
+                    source_rows = analytics["Traffic_Source"].fillna("").astype(str).str.strip()
+                    source_rows = source_rows.replace("", "Direct")
+                    source_summary = source_rows.value_counts().rename_axis("Source").reset_index(name="Page Views")
+                    st.markdown("#### Traffic sources")
+                    st.dataframe(source_summary, hide_index=True, use_container_width=True)
                 summary = []
                 for p in page_map.values():
                     p_rows = analytics[analytics["Page_Name"].astype(str).eq(p)]
