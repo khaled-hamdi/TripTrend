@@ -202,7 +202,7 @@ def render_campaign_page(public_offer_id: str = "") -> None:
             _offer_card(row, idx)
     st.markdown("---")
     st.subheader("Create your campaign")
-    st.caption("Submit one form for a free 30-day trial, a $12 monthly campaign, or a $20 three-month campaign. Your content is reviewed before publication.")
+    st.caption("Submit one form for a free 30-day trial, a 12$ monthly campaign, or a 20$ three-month campaign. Your content is reviewed before publication.")
     if st.button("Create Your Campaign", type="primary"):
         st.session_state["show_campaign_form"] = True
     if st.session_state.get("show_campaign_form"):
