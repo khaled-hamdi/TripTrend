@@ -56,6 +56,14 @@ def _date(value):
     return "" if pd.isna(parsed) else parsed.strftime("%Y-%m-%d")
 
 
+def _display_date(value, fallback=""):
+    """Display Excel/Sheets serial dates as readable dates."""
+    parsed = _date(value)
+    if parsed:
+        return parsed
+    return str(fallback or value or "").strip()
+
+
 def _safe_float(value, default=0.0):
     try:
         return float(value)
@@ -282,7 +290,7 @@ def render_approved_experiences(city: str = "", limit: int = 20):
             title = row.get("Title", "Travel experience")
             st.markdown(f"**{title}** · {author}")
             st.write(str(row.get("Comment", "")))
-            st.caption(f"{row.get('Experience_Type', 'Travel experience')} · {row.get('City') or 'All cities'} · {row.get('Experience_Date', row.get('Submitted_At', ''))}")
+            st.caption(f"{row.get('Experience_Type', 'Travel experience')} · {row.get('City') or 'All cities'} · {_display_date(row.get('Experience_Date', ''), row.get('Submitted_At', ''))}")
 
 
 def render_trip_planner(city: str, data_loader, data_mode: str, config: dict):
@@ -410,7 +418,7 @@ def render_trip_planner(city: str, data_loader, data_mode: str, config: dict):
     else:
         for i, (_, row) in enumerate(exp.head(10).iterrows()):
             with st.container(border=True):
-                st.markdown(f"**{row.get('Contributor_Name', 'Traveler')}** · {row.get('Experience_Date', row.get('Submitted_At', ''))}")
+                st.markdown(f"**{row.get('Contributor_Name', 'Traveler')}** · {_display_date(row.get('Experience_Date', ''), row.get('Submitted_At', ''))}")
                 st.write(str(row.get("Comment", row.get("Title", ""))))
                 exp_id = str(row.get("Experience_ID", f"experience-{i}"))
                 event_rows = _records("Engagement_Events")
