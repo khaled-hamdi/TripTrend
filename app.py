@@ -141,6 +141,50 @@ def track_page_view(page_name):
         stats.setdefault("total", {})[key] = stats.setdefault("total", {}).get(key, 0) + 1
         save_config(config)
 
+
+@st.cache_data(ttl=45, show_spinner=False)
+def _visitor_counts():
+    """Return stable visitor/page-view counts for the public counter and admin."""
+    try:
+        rows = read_tab("Visitor_Analytics", range_end="G")
+    except Exception:
+        return {"today": 0, "yesterday": 0, "total": 0, "views_today": 0}
+    if not rows or len(rows) < 2:
+        return {"today": 0, "yesterday": 0, "total": 0, "views_today": 0}
+    headers = [str(x).strip() for x in rows[0]]
+    width = len(headers)
+    frame = pd.DataFrame([(list(r) + [""] * width)[:width] for r in rows[1:]], columns=headers)
+    if not {"Visit_Date", "Session_ID"}.issubset(frame.columns):
+        return {"today": 0, "yesterday": 0, "total": 0, "views_today": 0}
+    dates = pd.to_datetime(frame["Visit_Date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    today = datetime.now().strftime("%Y-%m-%d")
+    yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+    return {
+        "today": int(frame.loc[dates.eq(today), "Session_ID"].astype(str).nunique()),
+        "yesterday": int(frame.loc[dates.eq(yesterday), "Session_ID"].astype(str).nunique()),
+        "total": int(frame["Session_ID"].astype(str).nunique()),
+        "views_today": int(dates.eq(today).sum()),
+    }
+
+
+def render_visitor_counter(settings):
+    if not settings.get("show_visitor_counter", True):
+        return
+    counts = _visitor_counts()
+    st.markdown("""
+    <style>
+    .visitor-counter {padding: 14px 18px; margin: 12px 0 22px; border: 1px solid rgba(120,140,170,.28); border-radius: 16px; background: linear-gradient(110deg, rgba(35,75,125,.12), rgba(30,150,125,.10));}
+    .visitor-counter-title {font-size: 1.05rem; font-weight: 700; margin-bottom: 2px;}
+    .visitor-counter-subtitle {font-size: .82rem; opacity: .72;}
+    </style>
+    <div class="visitor-counter"><div class="visitor-counter-title">👥 TripTrend community reach</div><div class="visitor-counter-subtitle">Live visitor activity from the public platform</div></div>
+    """, unsafe_allow_html=True)
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Visitors today", counts["today"])
+    c2.metric("Yesterday", counts["yesterday"])
+    c3.metric("Total visitors", counts["total"])
+
+
 def update_last_login(username):
     config = load_config()
     if username in config:
@@ -250,7 +294,7 @@ def try_parse_dates(series):
         except: pass
     return parsed
 
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=86400, show_spinner=False)
 def _load_all_price_history_from_google_sheets():
     """Read and normalize Price_History once; page calls only filter the cached frame."""
     rows = read_tab('Price_History', range_end='V')
@@ -291,7 +335,7 @@ def _load_all_price_history_from_google_sheets():
     col_map = {'Hotel':'Hotel_Name','Rate':'Rate','Star':'Star','P1':'Price1','P2':'price2','P3':'price3','Place1':'Place1','Place2':'place2','Place3':'place3','ArrivalDay':'day of arrival','BookingDate':'date of creat booking','Desc':'Desc','Location':'location','Dist':'Distance From places'}
     return raw, col_map, None
 
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=86400, show_spinner=False)
 def load_data_from_google_sheets(city_name, data_mode="All Data"):
     raw, col_map, error = _load_all_price_history_from_google_sheets()
     if error:
@@ -517,7 +561,8 @@ def main():
     if sheets_configured():
         ensure_new_tabs()
     config = load_config()
-    settings = config.get("_settings", {"public_access": True, "default_landing_page": "🧳 Plan Your Trip", "download_code": "premium2026"})
+    settings = config.get("_settings", {"public_access": True, "default_landing_page": "🧳 Plan Your Trip", "download_code": "premium2026", "show_visitor_counter": True})
+    settings.setdefault("show_visitor_counter", True)
     
     if 'logged_in' not in st.session_state: st.session_state.logged_in = False
     if 'admin_login_mode' not in st.session_state: st.session_state.admin_login_mode = False
@@ -653,7 +698,7 @@ def main():
     )
     st.session_state["language_code"] = LANGUAGE_OPTIONS[language_name]
     if st.session_state.get("is_public", False): 
-        if st.sidebar.button("🔐  Login"):
+        if st.sidebar.button("Login"):
             st.session_state.logged_in, st.session_state.is_public, st.session_state.admin_login_mode = False, False, True
             st.rerun()
     
@@ -662,6 +707,7 @@ def main():
     st.markdown(f"### {tr('Data scope')}")
     data_mode = st.radio(tr("Choose the records used on this page"), ["Latest Snapshot Only", "All Recorded Data"], horizontal=True, index=0, key="global_data_mode")
     
+    render_visitor_counter(settings)
     render_vip_banner(config)
 
     city = None
@@ -845,6 +891,7 @@ def main():
             st.dataframe(pd.DataFrame.from_dict(user_list, orient='index').reset_index().rename(columns={'index':'User'}), hide_index=True)
         with tab2:
             settings["public_access"] = st.toggle("🔓 Public Access", value=settings.get("public_access", False))
+            settings["show_visitor_counter"] = st.toggle("👥 Show visitor counter publicly", value=settings.get("show_visitor_counter", True))
             settings["download_code"] = st.text_input("Download Password", value=settings.get("download_code", "premium2026"))
             landing_options = list(page_map.values())
             configured_landing = settings.get("default_landing_page", landing_options[0])
@@ -853,7 +900,11 @@ def main():
             settings["default_landing_page"] = st.selectbox("Landing Page", landing_options, index=landing_options.index(configured_landing))
             if st.button("Save Settings"): config["_settings"] = settings; save_config(config); st.success("Updated!"); st.rerun()
         with tab3:
-            analytics_rows = read_tab("Visitor_Analytics", range_end="G")
+            try:
+                analytics_rows = read_tab("Visitor_Analytics", range_end="G")
+            except Exception as exc:
+                analytics_rows = []
+                st.info("Visitor analytics will appear after the first public visit. The Visitor_Analytics tab could not be read yet.")
             analytics = pd.DataFrame()
             if analytics_rows and len(analytics_rows) > 1:
                 headers = [str(x).strip() for x in analytics_rows[0]]
@@ -862,8 +913,9 @@ def main():
             today_text = datetime.now().strftime("%Y-%m-%d")
             yesterday_text = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
             if not analytics.empty and {"Visit_Date", "Session_ID", "Page_Name"}.issubset(analytics.columns):
-                today_rows = analytics[analytics["Visit_Date"].astype(str).eq(today_text)]
-                yesterday_rows = analytics[analytics["Visit_Date"].astype(str).eq(yesterday_text)]
+                analytics["_visit_date_norm"] = pd.to_datetime(analytics["Visit_Date"], errors="coerce").dt.strftime("%Y-%m-%d")
+                today_rows = analytics[analytics["_visit_date_norm"].eq(today_text)]
+                yesterday_rows = analytics[analytics["_visit_date_norm"].eq(yesterday_text)]
                 st.subheader("Visitor analytics")
                 m1, m2, m3 = st.columns(3)
                 m1.metric("Unique visitors today", today_rows["Session_ID"].nunique())
@@ -872,7 +924,7 @@ def main():
                 summary = []
                 for p in page_map.values():
                     p_rows = analytics[analytics["Page_Name"].astype(str).eq(p)]
-                    summary.append({"Page": p, "Today": int((p_rows["Visit_Date"].astype(str) == today_text).sum()), "Yesterday": int((p_rows["Visit_Date"].astype(str) == yesterday_text).sum()), "Total Page Views": len(p_rows), "Unique Visitors": p_rows["Session_ID"].nunique()})
+                    summary.append({"Page": p, "Today": int((p_rows["_visit_date_norm"] == today_text).sum()), "Yesterday": int((p_rows["_visit_date_norm"] == yesterday_text).sum()), "Total Page Views": len(p_rows), "Unique Visitors": p_rows["Session_ID"].nunique()})
                 df_summary = pd.DataFrame(summary)
             else:
                 stats = config.get("_stats", {"daily": {}, "total": {}})

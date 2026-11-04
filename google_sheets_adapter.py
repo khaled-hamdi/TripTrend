@@ -87,7 +87,16 @@ def ensure_tab(tab_name: str, headers: Sequence | None = None):
             body={'requests': [{'addSheet': {'properties': {'title': tab_name}}}]},
         ).execute()
     if headers:
-        current = read_tab(tab_name, range_end='A1')
+        # Avoid the cached reader here: a missing tab used to raise an HTTP
+        # error and stop the whole Admin Panel before the tab could be created.
+        current = []
+        try:
+            current = _service().spreadsheets().values().get(
+                spreadsheetId=spreadsheet_id(), range=f"'{tab_name}'!A1:A1",
+                majorDimension='ROWS', valueRenderOption='UNFORMATTED_VALUE'
+            ).execute().get('values', [])
+        except Exception:
+            current = []
         if not current:
             _service().spreadsheets().values().update(
                 spreadsheetId=spreadsheet_id(),
@@ -103,13 +112,19 @@ def append_rows(tab_name: str, rows: Iterable[Sequence], headers: Sequence | Non
     values = [list(row) for row in rows]
     if not values:
         return None
-    return _service().spreadsheets().values().append(
+    result = _service().spreadsheets().values().append(
         spreadsheetId=spreadsheet_id(),
         range=f"'{tab_name}'!A1",
         valueInputOption='USER_ENTERED',
         insertDataOption='INSERT_ROWS',
         body={'values': values},
     ).execute()
+    try:
+        import streamlit as st
+        st.cache_data.clear()
+    except Exception:
+        pass
+    return result
 
 
 def replace_tab(tab_name: str, rows: Iterable[Sequence]):
