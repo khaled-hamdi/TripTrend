@@ -149,6 +149,9 @@ def render_events_explorer():
     events["_event_date"] = dates
     if "Status" in events.columns:
         events = events[events["Status"].astype(str).str.lower().isin(["active", "approved", "featured", ""])].copy()
+    # Public event cards show current and future events only. Historical rows
+    # remain in Google Sheets for records but are not promoted to visitors.
+    events = events[events["_event_date"].isna() | (events["_event_date"] >= pd.Timestamp.now().normalize())].copy()
     city_names = sorted([x for x in events["City"].astype(str).unique() if x.strip()], key=str.casefold)
     if not city_names:
         st.info("No event destinations are available yet.")
@@ -166,7 +169,6 @@ def render_events_explorer():
     city_events = events[events["City"].astype(str).map(city_key).eq(city_key(selected))].copy()
     today = pd.Timestamp.now().normalize()
     upcoming = city_events[city_events["_event_date"].isna() | (city_events["_event_date"] >= today)].sort_values("_event_date")
-    past = city_events[city_events["_event_date"].notna() & (city_events["_event_date"] < today)].sort_values("_event_date", ascending=False)
     st.markdown(f"### 📅 Upcoming events in {selected}")
     if upcoming.empty:
         st.info("No upcoming events are listed for this destination.")
@@ -178,10 +180,6 @@ def render_events_explorer():
                 st.markdown(f"**🎉 {title}** · {date_text}")
                 st.caption(f"{row.get('Location', row.get('City_or_Venue', ''))} · {row.get('Cost', row.get('Price', '')) or 'Details available'}")
                 if str(row.get("Description", "")).strip(): st.write(row.get("Description"))
-    if not past.empty:
-        with st.expander(f"🕰️ Past events in {selected} ({len(past)})"):
-            for _, row in past.head(20).iterrows():
-                st.markdown(f"🗓️ **{row.get('Event_Name', row.get('Name', 'Event'))}** · {_date(row['_event_date'])}")
 
 
 def _community_session_id():

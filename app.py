@@ -189,16 +189,13 @@ def render_visitor_counter(settings):
     counts = _visitor_counts()
     st.markdown("""
     <style>
-    .visitor-counter {padding: 14px 18px; margin: 12px 0 22px; border: 1px solid rgba(120,140,170,.28); border-radius: 16px; background: linear-gradient(110deg, rgba(35,75,125,.12), rgba(30,150,125,.10));}
-    .visitor-counter-title {font-size: 1.05rem; font-weight: 700; margin-bottom: 2px;}
+    .visitor-counter {max-width: 520px; padding: 10px 16px; margin: 10px auto 18px; text-align: center; border: 1px solid rgba(120,140,170,.28); border-radius: 16px; background: linear-gradient(110deg, rgba(35,75,125,.12), rgba(30,150,125,.10));}
+    .visitor-counter-title {font-size: .98rem; font-weight: 700; margin-bottom: 2px;}
     .visitor-counter-subtitle {font-size: .82rem; opacity: .72;}
     </style>
     <div class="visitor-counter"><div class="visitor-counter-title">👥 TripTrend community reach</div><div class="visitor-counter-subtitle">Live visitor activity from the public platform</div></div>
     """, unsafe_allow_html=True)
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Visitors today", counts["today"])
-    c2.metric("Yesterday", counts["yesterday"])
-    c3.metric("Total visitors", counts["total"])
+    st.metric("Visitors", counts["total"])
 
 
 def update_last_login(username):
@@ -706,12 +703,14 @@ def main():
     track_page_view(selected_page)
 
     st.sidebar.title(f"🚀 {st.session_state.username}")
-    language_name = st.sidebar.selectbox(
-        "🌐 Language / اللغة / Langue",
-        list(LANGUAGE_OPTIONS.keys()),
-        index=list(LANGUAGE_OPTIONS.values()).index(st.session_state.get("language_code", "en")),
-        key="language_name",
-    )
+    top_language_col, top_space = st.columns([1, 4])
+    with top_language_col:
+        language_name = st.selectbox(
+            "🌐 Language / اللغة / Langue",
+            list(LANGUAGE_OPTIONS.keys()),
+            index=list(LANGUAGE_OPTIONS.values()).index(st.session_state.get("language_code", "en")),
+            key="language_name_main",
+        )
     st.session_state["language_code"] = LANGUAGE_OPTIONS[language_name]
     if st.session_state.get("is_public", False): 
         if st.sidebar.button("Login"):
@@ -914,7 +913,16 @@ def main():
             if configured_landing not in landing_options:
                 configured_landing = next((p for p in landing_options if str(configured_landing).strip().lower() in p.lower()), landing_options[0])
             settings["default_landing_page"] = st.selectbox("Landing Page", landing_options, index=landing_options.index(configured_landing))
-            if st.button("Save Settings"): config["_settings"] = settings; save_config(config); st.success("Updated!"); st.rerun()
+            if st.button("Save Settings"):
+                config["_settings"] = settings
+                save_config(config)
+                if sheets_configured():
+                    try:
+                        append_rows("Settings", [["show_visitor_counter", str(bool(settings["show_visitor_counter"]))]], headers=["Setting_Key", "Setting_Value"])
+                    except Exception as exc:
+                        st.warning(f"Local setting saved, but Google Sheets setting could not be updated: {exc}")
+                st.success("Updated!")
+                st.rerun()
         with tab3:
             try:
                 analytics_rows = read_tab("Visitor_Analytics", range_end="L")
