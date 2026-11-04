@@ -653,7 +653,7 @@ def main():
     )
     st.session_state["language_code"] = LANGUAGE_OPTIONS[language_name]
     if st.session_state.get("is_public", False): 
-        if st.sidebar.button("🔐 Admin Login"):
+        if st.sidebar.button("🔐  Login"):
             st.session_state.logged_in, st.session_state.is_public, st.session_state.admin_login_mode = False, False, True
             st.rerun()
     
