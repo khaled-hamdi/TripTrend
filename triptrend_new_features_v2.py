@@ -293,9 +293,34 @@ def render_approved_experiences(city: str = "", limit: int = 20):
             st.caption(f"{row.get('Experience_Type', 'Travel experience')} · {row.get('City') or 'All cities'} · {_display_date(row.get('Experience_Date', ''), row.get('Submitted_At', ''))}")
 
 
+def render_daily_pulse_summary(city: str):
+    """Show the former Daily Travel Pulse as a compact city summary."""
+    pulse = _records("Daily_Travel_Pulse")
+    if pulse.empty:
+        return
+    if "City" in pulse.columns:
+        pulse = pulse[pulse["City"].astype(str).map(city_key).eq(city_key(city))].copy()
+    if pulse.empty:
+        return
+    date_col = next((c for c in ["Date", "Pulse_Date", "Updated_At"] if c in pulse.columns), None)
+    if date_col:
+        pulse["_pulse_date"] = _sheet_dates(pulse[date_col])
+        pulse = pulse.sort_values("_pulse_date", ascending=False)
+    row = pulse.iloc[0]
+    headline = str(row.get("Headline", row.get("Title", "Today's travel update")) or "Today's travel update")
+    with st.container(border=True):
+        st.subheader("📰 TripTrend Today")
+        st.caption(headline)
+        items = [("Hotels", "Hotel_Summary"), ("Weather", "Weather_Summary"), ("Currency", "Currency_Summary"), ("Events", "Event_Summary"), ("Flights", "Flight_Summary"), ("Travel tip", "Tip")]
+        shown = [(label, str(row.get(col, "")).strip()) for label, col in items if str(row.get(col, "")).strip()]
+        if shown:
+            st.dataframe(pd.DataFrame(shown, columns=["Topic", "Today's update"]), hide_index=True, use_container_width=True)
+
+
 def render_trip_planner(city: str, data_loader, data_mode: str, config: dict):
     st.title(f"🧳 Plan Your Trip: {city}")
     st.caption("A compact city snapshot combining hotel intelligence, events, travel costs, and verified traveler experiences.")
+    render_daily_pulse_summary(city)
     visit_date = st.date_input("📅 Visit / arrival date", value=datetime.now().date(), key=f"visit_date_{city}")
     df, cmap, err = data_loader(city, data_mode)
     hotel_available = not (err or df is None or df.empty)
