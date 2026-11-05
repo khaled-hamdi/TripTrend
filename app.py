@@ -5,6 +5,7 @@ import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 import os
 import re
 import json
@@ -42,6 +43,7 @@ def sheets_configured():
     except Exception:
         return False
 APP_VERSION = "V3 Complete"
+REPORT_TIMEZONE = ZoneInfo(os.getenv("TRIPTREND_TIMEZONE", "Africa/Cairo"))
 VISIT_HEADERS = ["Visit_ID", "Visit_Date", "Visit_Time", "Session_ID", "Username", "Page_Name", "Visit_Type", "Traffic_Source", "UTM_Source", "UTM_Medium", "UTM_Campaign", "Referrer"]
 
 LANGUAGE_OPTIONS = {"English": "en", "العربية": "ar", "Français": "fr"}
@@ -125,6 +127,20 @@ def _traffic_source():
     return source, utm_source, utm_medium, utm_campaign, referrer
 
 
+def _normalize_visit_dates(series):
+    """Normalize ISO, locale, datetime, and Excel-serial visit dates."""
+    text = series.astype(str).str.strip()
+    parsed = pd.to_datetime(text, errors="coerce")
+    numeric = pd.to_numeric(text, errors="coerce")
+    serial = numeric.between(20000, 80000)
+    parsed.loc[serial] = pd.Timestamp("1899-12-30") + pd.to_timedelta(numeric[serial], unit="D")
+    return parsed.dt.strftime("%Y-%m-%d")
+
+
+def _report_now():
+    return datetime.now(REPORT_TIMEZONE)
+
+
 def track_page_view(page_name):
     """Record one page view per page/session and persist it in Google Sheets.
 
@@ -138,7 +154,7 @@ def track_page_view(page_name):
     if key in seen:
         return
     seen.add(key)
-    now = datetime.now()
+    now = _report_now()
     source, utm_source, utm_medium, utm_campaign, referrer = _traffic_source()
     row = [
         f"VIS-{hashlib.sha256(f'{session_id}-{key}'.encode()).hexdigest()[:16]}",
@@ -172,9 +188,10 @@ def _visitor_counts():
     frame = pd.DataFrame([(list(r) + [""] * width)[:width] for r in rows[1:]], columns=headers)
     if not {"Visit_Date", "Session_ID"}.issubset(frame.columns):
         return {"today": 0, "yesterday": 0, "total": 0, "views_today": 0}
-    dates = pd.to_datetime(frame["Visit_Date"], errors="coerce").dt.strftime("%Y-%m-%d")
-    today = datetime.now().strftime("%Y-%m-%d")
-    yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+    dates = _normalize_visit_dates(frame["Visit_Date"])
+    report_now = _report_now()
+    today = report_now.strftime("%Y-%m-%d")
+    yesterday = (report_now - timedelta(days=1)).strftime("%Y-%m-%d")
     return {
         "today": int(frame.loc[dates.eq(today), "Session_ID"].astype(str).nunique()),
         "yesterday": int(frame.loc[dates.eq(yesterday), "Session_ID"].astype(str).nunique()),
@@ -918,10 +935,11 @@ def main():
                 headers = [str(x).strip() for x in analytics_rows[0]]
                 width = len(headers)
                 analytics = pd.DataFrame([(list(r) + [""] * width)[:width] for r in analytics_rows[1:]], columns=headers)
-            today_text = datetime.now().strftime("%Y-%m-%d")
-            yesterday_text = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+            report_now = _report_now()
+            today_text = report_now.strftime("%Y-%m-%d")
+            yesterday_text = (report_now - timedelta(days=1)).strftime("%Y-%m-%d")
             if not analytics.empty and {"Visit_Date", "Session_ID", "Page_Name"}.issubset(analytics.columns):
-                analytics["_visit_date_norm"] = pd.to_datetime(analytics["Visit_Date"], errors="coerce").dt.strftime("%Y-%m-%d")
+                analytics["_visit_date_norm"] = _normalize_visit_dates(analytics["Visit_Date"])
                 today_rows = analytics[analytics["_visit_date_norm"].eq(today_text)]
                 yesterday_rows = analytics[analytics["_visit_date_norm"].eq(yesterday_text)]
                 st.subheader("Visitor analytics")
@@ -936,8 +954,19 @@ def main():
                     st.markdown("#### Traffic sources")
                     st.dataframe(source_summary, hide_index=True, use_container_width=True)
                 summary = []
-                for p in page_map.values():
-                    p_rows = analytics[analytics["Page_Name"].astype(str).eq(p)]
+                # Include retired/older page names already present in the
+                # analytics tab so the page table reconciles with sources.
+                known_pages = list(page_map.values())
+                page_names_norm = analytics["Page_Name"].fillna("").astype(str).str.strip()
+                historical_pages = [p for p in page_names_norm.tolist() if p]
+                pages_for_report = list(dict.fromkeys(known_pages + historical_pages))
+                if page_names_norm.eq("").any():
+                    pages_for_report.append("(Unassigned / Other)")
+                for p in pages_for_report:
+                    if p == "(Unassigned / Other)":
+                        p_rows = analytics[page_names_norm.eq("")]
+                    else:
+                        p_rows = analytics[page_names_norm.eq(p)]
                     summary.append({"Page": p, "Today": int((p_rows["_visit_date_norm"] == today_text).sum()), "Yesterday": int((p_rows["_visit_date_norm"] == yesterday_text).sum()), "Total Page Views": len(p_rows), "Unique Visitors": p_rows["Session_ID"].nunique()})
                 df_summary = pd.DataFrame(summary)
             else:
