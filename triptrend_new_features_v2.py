@@ -8,7 +8,7 @@ import pandas as pd
 import streamlit as st
 
 from google_sheets_adapter import read_tab, append_rows, ensure_tab
-from triptrend_external_data_v2 import external_events, city_prices, external_weather, external_currency, external_flights, city_key, price_history_city_names, external_cities
+from triptrend_external_data_v2 import external_events, external_events_for_city, city_prices, city_prices_for_city, external_weather, external_currency, external_flights, city_key, price_history_city_names, external_cities
 
 # These tabs are created automatically if the connected native Google Sheet is missing them.
 NEW_TAB_HEADERS = {
@@ -320,10 +320,14 @@ def render_trip_planner(city: str, data_loader, data_mode: str, config: dict):
     prices = pd.to_numeric(selected_df.get("Best_Price", pd.Series(dtype=float)), errors="coerce").dropna()
     hotels_from = prices.min() if not prices.empty else None
     hotel_avg = prices.mean() if not prices.empty else None
-    events = _event_rows(city)
+    events = external_events_for_city(city)
+    if events.empty:
+        events = _event_rows(city)
     weather = external_weather()
     currency = external_currency()
-    city_costs = city_prices()
+    city_costs = city_prices_for_city(city)
+    if city_costs.empty:
+        city_costs = city_prices()
     food = _records("Food_Prices")
     transport = _records("Transport_Prices")
     flights = external_flights()

@@ -77,6 +77,26 @@ def read_tab(tab_name: str, range_end: str = 'ZZ') -> list[list]:
         return result.get('values', [])
 
 
+def read_range(tab_name: str, a1_range: str) -> list[list]:
+    """Read only an explicit A1 range and cache it briefly.
+
+    This is used for lightweight indexes such as the City column instead of
+    downloading the complete Price_History tab just to build city cards.
+    """
+    try:
+        import streamlit as st
+        @st.cache_data(ttl=120, show_spinner=False)
+        def _cached(tab, cell_range):
+            return _service().spreadsheets().values().get(
+                spreadsheetId=spreadsheet_id(), range=f"'{tab}'!{cell_range}",
+                majorDimension='ROWS', valueRenderOption='UNFORMATTED_VALUE').execute().get('values', [])
+        return _cached(tab_name, a1_range)
+    except Exception:
+        return _service().spreadsheets().values().get(
+            spreadsheetId=spreadsheet_id(), range=f"'{tab_name}'!{a1_range}",
+            majorDimension='ROWS', valueRenderOption='UNFORMATTED_VALUE').execute().get('values', [])
+
+
 def ensure_tab(tab_name: str, headers: Sequence | None = None):
     """Create a missing sheet tab and optionally write its header row."""
     metadata = get_metadata()

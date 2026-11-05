@@ -4,7 +4,7 @@ import re
 from datetime import date
 import pandas as pd
 import streamlit as st
-from google_sheets_adapter import list_tabs, read_tab
+from google_sheets_adapter import list_tabs, read_tab, read_range
 from triptrend_data_engine import normalize_city
 
 
@@ -66,6 +66,29 @@ def external_events() -> pd.DataFrame:
 
 
 @st.cache_data(ttl=300, show_spinner=False)
+def external_events_for_city(city: str) -> pd.DataFrame:
+    """Read only the EV__ tab matching the selected city."""
+    target = city_key(city)
+    frames = []
+    for tab in _tabs(["EV__"]):
+        tab_city = _city_from_tab(tab, "EV__")
+        if target and city_key(tab_city) != target:
+            continue
+        df = _frame(tab)
+        if df.empty:
+            continue
+        name = _col(df, ["Event_Name", "Event Name", "Name"])
+        dt = _col(df, ["Date", "Event_Date"])
+        tm = _col(df, ["Time", "Event_Time"])
+        cost = _col(df, ["Cost", "Price"])
+        venue = _col(df, ["City_or_Venue", "Venue", "Location"])
+        out = pd.DataFrame({"City": tab_city, "Event_Name": df[name] if name else "", "Date": df[dt] if dt else "", "Time": df[tm] if tm else "", "Cost": df[cost] if cost else "", "City_or_Venue": df[venue] if venue else "", "Source_Tab": tab})
+        out["Event_Date"] = out["Date"]
+        frames.append(out)
+    return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=["City","Event_Name","Date","Event_Date","Time","Cost","City_or_Venue","Source_Tab"])
+
+
+@st.cache_data(ttl=300, show_spinner=False)
 def city_prices() -> pd.DataFrame:
     frames = []
     for tab in _tabs(["PR__"]):
@@ -87,6 +110,29 @@ def city_prices() -> pd.DataFrame:
         })
         out["Price_Value"] = pd.to_numeric(out["Raw_Price"].astype(str).str.replace(r"[^0-9.\-]", "", regex=True), errors="coerce")
         out["Currency"] = out["Raw_Price"].astype(str).str.extract(r"([£$€¥₹₺]|Dh|E£|Fr\\.)", expand=False).fillna("")
+        frames.append(out)
+    return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=["City","Item_Name","Raw_Price","Raw_Range","Category","Source_Tab","Price_Value","Currency"])
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def city_prices_for_city(city: str) -> pd.DataFrame:
+    """Read only the PR__ tab matching the selected city."""
+    target = city_key(city)
+    frames = []
+    for tab in _tabs(["PR__"]):
+        tab_city = _city_from_tab(tab, "PR__")
+        if target and city_key(tab_city) != target:
+            continue
+        df = _frame(tab)
+        if df.empty:
+            continue
+        item = _col(df, ["Kind", "kind", "Item", "Item_Name"])
+        price = _col(df, ["Prices", "prices", "Price", "Edit"])
+        rng = _col(df, ["Range", "Price_Range"])
+        cat = _col(df, ["category", "categor", "Category"])
+        out = pd.DataFrame({"City": tab_city, "Item_Name": df[item] if item else "", "Raw_Price": df[price] if price else "", "Raw_Range": df[rng] if rng else "", "Category": df[cat] if cat else "", "Source_Tab": tab})
+        out["Price_Value"] = pd.to_numeric(out["Raw_Price"].astype(str).str.replace(r"[^0-9.\-]", "", regex=True), errors="coerce")
+        out["Currency"] = out["Raw_Price"].astype(str).str.extract(r"([£$€¥₹₺]|Dh|E£|Fr\.)", expand=False).fillna("")
         frames.append(out)
     return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=["City","Item_Name","Raw_Price","Raw_Range","Category","Source_Tab","Price_Value","Currency"])
 
@@ -204,14 +250,12 @@ def available_city_names(base_names=()):
 def price_history_city_names():
     """Return only cities that actually have hotel rows in Price_History."""
     try:
-        rows = read_tab("Price_History")
+        # City is column E in the canonical Price_History schema.  Do not
+        # download the complete history just to build the destination cards.
+        rows = read_range("Price_History", "E:E")
         if not rows or len(rows) < 2:
             return []
-        headers = [str(x).strip() for x in rows[0]]
-        if "City" not in headers:
-            return []
-        idx = headers.index("City")
-        values = [r[idx] for r in rows[1:] if len(r) > idx and str(r[idx]).strip()]
+        values = [r[0] for r in rows[1:] if r and str(r[0]).strip()]
         result = {}
         for value in values:
             raw = str(value).strip()

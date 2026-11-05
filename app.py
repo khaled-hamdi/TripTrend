@@ -41,7 +41,7 @@ def sheets_configured():
         return bool(secret_id and secret_sa)
     except Exception:
         return False
-APP_VERSION = "Ver 2.0"
+APP_VERSION = "V3 Complete"
 VISIT_HEADERS = ["Visit_ID", "Visit_Date", "Visit_Time", "Session_ID", "Username", "Page_Name", "Visit_Type", "Traffic_Source", "UTM_Source", "UTM_Medium", "UTM_Campaign", "Referrer"]
 
 LANGUAGE_OPTIONS = {"English": "en", "العربية": "ar", "Français": "fr"}
@@ -568,10 +568,13 @@ def generate_marketing_facts(latest_df, history_df, col_map, city, lang="English
 # ======================================================================================
 # --- MAIN APP ---
 # ======================================================================================
-st.set_page_config(page_title=f"Hotel Analytics Pro {APP_VERSION}", page_icon="🏨", layout="wide")
+st.set_page_config(page_title=f"TripTrend {APP_VERSION}", page_icon="🏨", layout="wide")
 
 def main():
-    if sheets_configured():
+    # Optional tabs are an admin-maintenance task. Running ensure_tab for all
+    # of them on every public visit adds many Sheets API calls before the guest
+    # can even see the destination cards.
+    if sheets_configured() and st.session_state.get('role') == 'admin':
         ensure_new_tabs()
     config = load_config()
     settings = config.get("_settings", {"public_access": True, "default_landing_page": "🧳 Plan Your Trip", "download_code": "premium2026", "show_visitor_counter": True})
