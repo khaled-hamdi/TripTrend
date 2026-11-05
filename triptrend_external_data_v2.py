@@ -145,7 +145,18 @@ def _temperature(value):
 @st.cache_data(ttl=300, show_spinner=False)
 def external_weather() -> pd.DataFrame:
     frames = []
-    for tab in _tabs(["WEATHER__"]):
+    # Weather workbooks may use either one WEATHER__ tab per city or one
+    # shared tab whose columns are city names (the format used by the user's
+    # screenshot). Support both formats without requiring a sheet rename.
+    weather_tabs = _tabs(["WEATHER__"])
+    try:
+        for tab in list_tabs():
+            normalized = re.sub(r"[^a-z0-9]", "", str(tab).casefold())
+            if normalized in {"weather", "weathermaster", "weatherdata", "weatherforecast"} and tab not in weather_tabs:
+                weather_tabs.append(tab)
+    except Exception:
+        pass
+    for tab in weather_tabs:
         df = _frame(tab)
         if df.empty:
             continue
