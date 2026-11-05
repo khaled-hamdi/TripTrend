@@ -1013,11 +1013,24 @@ def main():
             uploaded = st.file_uploader("Choose daily workbook", type=['xlsx'], key='daily_import_file')
             if uploaded is not None:
                 import tempfile
-                temp_path = tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx')
-                temp_path.write(uploaded.getvalue())
-                temp_path.close()
-                try:
-                    prepared = prepare_import(temp_path.name)
+                file_bytes = uploaded.getvalue()
+                file_hash = hashlib.sha256(file_bytes).hexdigest()
+                prepared = st.session_state.get('daily_import_prepared')
+                if st.session_state.get('daily_import_hash') != file_hash or prepared is None:
+                    temp_path = tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx')
+                    temp_path.write(file_bytes)
+                    temp_path.close()
+                    try:
+                        # Prepare once per selected workbook. Streamlit reruns on
+                        # every widget interaction; repeating this read-heavy step
+                        # caused Google Sheets 429 quota errors.
+                        prepared = prepare_import(temp_path.name)
+                        st.session_state['daily_import_prepared'] = prepared
+                        st.session_state['daily_import_hash'] = file_hash
+                    except Exception as e:
+                        st.error(f"Import preview failed: {e}")
+                        prepared = None
+                if prepared is not None:
                     st.dataframe(prepared['summary'], hide_index=True, use_container_width=True)
                     st.write({
                         'New price records': len(prepared['history_rows']),
@@ -1025,11 +1038,14 @@ def main():
                         'New aliases': len(prepared['alias_rows']),
                     })
                     if st.button('✅ Approve and write to Google Sheets', type='primary', key='approve_daily_import'):
-                        result = apply_import(prepared)
-                        st.cache_data.clear()
-                        st.success(f"Import completed: {result['history_added']} price records, {result['master_added']} hotels, {result['aliases_added']} aliases.")
-                except Exception as e:
-                    st.error(f"Import preview failed: {e}")
+                        try:
+                            result = apply_import(prepared)
+                            st.session_state.pop('daily_import_prepared', None)
+                            st.session_state.pop('daily_import_hash', None)
+                            st.cache_data.clear()
+                            st.success(f"Import completed: {result['history_added']} price records, {result['master_added']} hotels, {result['aliases_added']} aliases.")
+                        except Exception as e:
+                            st.error(f"Google Sheets write failed: {e}")
         with tab6:
             render_content_admin()
 
