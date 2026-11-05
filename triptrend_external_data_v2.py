@@ -168,7 +168,11 @@ def external_weather() -> pd.DataFrame:
             values = df[col].tolist()
             previous_day = None
             month = 9
-            for i in range(0, len(values) - 2):
+            # The source layout is a repeating three-row block:
+            # day number, maximum temperature, minimum temperature.
+            # Stepping by three prevents temperature values from being
+            # misinterpreted as additional day numbers.
+            for i in range(0, len(values) - 2, 3):
                 raw_day = values[i]
                 if not isinstance(raw_day, (int, float)):
                     continue

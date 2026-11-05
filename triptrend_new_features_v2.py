@@ -348,7 +348,16 @@ def render_trip_planner(city: str, data_loader, data_mode: str, config: dict):
         w = weather[weather.get("City", pd.Series(dtype=str)).map(city_key).eq(city_key(city))] if "City" in weather.columns else weather
         if "Forecast_Date" in w.columns:
             chosen = w[w["Forecast_Date"].astype(str).eq(str(visit_date))]
-            if not chosen.empty: w = chosen
+            if not chosen.empty:
+                w = chosen
+            elif "Day" in w.columns:
+                # The Weather tab stores day numbers (6, 7, 8...) under each
+                # city, without a month. Match the selected calendar day
+                # directly instead of relying on the parser's fallback month.
+                day_values = pd.to_numeric(w["Day"], errors="coerce")
+                chosen = w[day_values.eq(visit_date.day)]
+                if not chosen.empty:
+                    w = chosen
         if not w.empty:
             r = w.iloc[-1]
             snapshot.append({"Item": "Weather", "Summary": f"High {r.get('Temperature_Max', '—')}° / Low {r.get('Temperature_Min', '—')}°"})
