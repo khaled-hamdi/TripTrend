@@ -319,9 +319,17 @@ def render_daily_pulse_summary(city: str):
 
 def render_trip_planner(city: str, data_loader, data_mode: str, config: dict):
     st.title(f"🧳 Plan Your Trip: {city}")
-    st.caption("A compact city snapshot combining hotel intelligence, events, travel costs, and verified traveler experiences.")
+    st.caption("A compact city snapshot combining hotel intelligence, travel costs, events, and verified traveler experiences.")
     render_daily_pulse_summary(city)
     visit_date = st.date_input("📅 Visit / arrival date", value=datetime.now().date(), key=f"visit_date_{city}")
+    details_key = f"planner_details_loaded_{city_key(city)}"
+    if not st.session_state.get(details_key, False):
+        st.info("Choose a destination and load the full intelligence only when you need hotel prices, weather, events, flights, costs, and traveler content.")
+        if st.button("⚡ Load full trip intelligence", type="primary", use_container_width=True, key=f"load_trip_details_{city_key(city)}"):
+            st.session_state[details_key] = True
+            st.rerun()
+        return
+
     df, cmap, err = data_loader(city, data_mode)
     hotel_available = not (err or df is None or df.empty)
     if not hotel_available:
@@ -345,6 +353,7 @@ def render_trip_planner(city: str, data_loader, data_mode: str, config: dict):
     prices = pd.to_numeric(selected_df.get("Best_Price", pd.Series(dtype=float)), errors="coerce").dropna()
     hotels_from = prices.min() if not prices.empty else None
     hotel_avg = prices.mean() if not prices.empty else None
+
     events = external_events_for_city(city)
     if events.empty:
         events = _event_rows(city)
