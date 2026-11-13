@@ -28,10 +28,32 @@ from triptrend_new_features_v2 import (ensure_new_tabs, render_trip_planner, ren
 try:
     from triptrend_new_features_v2 import render_ask_travel_expert
 except ImportError:
-    # Compatibility fallback: the app remains bootable while an older helper
-    # file is being replaced in the deployed repository.
+    # Compatibility fallback: keep the public page functional while an older
+    # helper file is being replaced in the deployed repository.
     def render_ask_travel_expert(city="", compact=False):
-        st.info("Ask a Travel Expert is being enabled. Please deploy the current triptrend_new_features_v2.py file.")
+        headers = ["Question_ID", "Name", "Contact", "City", "Category", "Travel_Date", "Question", "Created_At", "Status", "Priority", "Assigned_To", "Published", "Likes", "Answer_ID"]
+        if not compact:
+            st.title("🧠 Ask a Travel Expert")
+            st.caption("Ask about hotels, costs, transport, weather, events, or the best time to travel.")
+        with st.form(f"legacy_expert_question_{str(city).replace(' ', '_') or 'all'}"):
+            c1, c2 = st.columns(2)
+            destination = c1.text_input("Destination", value=str(city or ""))
+            category = c2.selectbox("Question category", ["Hotels", "Trip cost", "Transport", "Food", "SIM / Internet", "Events", "Best dates", "Activities", "Visa / requirements", "Other"])
+            name = st.text_input("Your name (optional)")
+            contact = st.text_input("Email or contact (optional)")
+            travel_date = st.text_input("Travel date (optional)")
+            question = st.text_area("Your question")
+            submitted = st.form_submit_button("Send question", type="primary")
+        if submitted:
+            if not question.strip():
+                st.error("Please write your question first.")
+            else:
+                qid = f"Q-{hashlib.sha256(f'{datetime.now().timestamp()}-{question}'.encode()).hexdigest()[:10]}"
+                try:
+                    append_rows("Expert_Questions", [[qid, name.strip() or "Traveler", contact.strip(), destination.strip(), category, travel_date.strip(), question.strip(), datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "Pending", "Normal", "", "FALSE", 0, ""]], headers=headers)
+                    st.success("Your question was received and will be reviewed before publication.")
+                except Exception as exc:
+                    st.error(f"Could not save the question: {exc}")
 from triptrend_admin_tools_v2 import render_content_admin
 from triptrend_external_data_v2 import external_cities, city_key, available_city_names, price_history_city_names
 
@@ -515,7 +537,7 @@ def render_explore_cards(page_map, settings):
                 st.markdown(f"**{title}**")
                 st.caption(description)
                 if st.button("Explore", key=f"explore_card_{i}", use_container_width=True):
-                    st.session_state.current_page = title
+                    st.session_state.pending_page = title
                     st.rerun()
 
 
@@ -770,6 +792,11 @@ def main():
     
     if 'current_page' not in st.session_state or st.session_state.current_page not in nav_options:
         st.session_state.current_page = nav_options[0]
+
+    pending_page = st.session_state.pop("pending_page", "")
+    if pending_page in nav_options:
+        st.session_state.current_page = pending_page
+        st.session_state.nav_radio = pending_page
 
     def on_nav_change(): st.session_state.current_page = st.session_state.nav_radio
     selected_page = st.sidebar.radio("Navigation", nav_options, index=nav_options.index(st.session_state.current_page), key="nav_radio", on_change=on_nav_change)
