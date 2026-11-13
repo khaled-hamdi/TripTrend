@@ -38,10 +38,100 @@ def _row_label(row, tab: str) -> str:
     return f'{tab} submission'
 
 
+def _set_fields(tab, row_index, updates):
+    rows = read_tab(tab)
+    if not rows or row_index + 1 >= len(rows):
+        return False
+    headers = [str(x).strip() for x in rows[0]]
+    body = [(list(r) + [''] * len(headers))[:len(headers)] for r in rows[1:]]
+    for field, value in updates.items():
+        if field in headers:
+            body[row_index][headers.index(field)] = value
+    replace_tab(tab, [headers] + body)
+    return True
+
+
+def _award_contributor_points(contributor_id, amount, reference_id, reason):
+    if not str(contributor_id).strip():
+        return
+    contributors = _records("Contributors")
+    if not contributors.empty and "Contributor_ID" in contributors.columns:
+        matches = contributors[contributors["Contributor_ID"].astype(str).eq(str(contributor_id))]
+        if not matches.empty:
+            idx = matches.index[0]
+            current = int(float(matches.iloc[0].get("Points", 0) or 0))
+            total = current + int(amount)
+            level = "New Contributor" if total < 10 else "Travel Contributor" if total < 50 else "Travel Insider" if total < 150 else "City Expert" if total < 500 else "Top Travel Expert"
+            _set_fields("Contributors", idx, {"Points": total, "Level": level, "Last_Login": datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
+    append_rows("Contributor_Points_Log", [[uuid.uuid4().hex, contributor_id, "Expert Answer", reference_id, amount, "Approved", reason, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), st.session_state.get("username", "admin")]], headers=NEW_TAB_HEADERS["Contributor_Points_Log"])
+
+
+def render_expert_admin():
+    st.subheader("🧠 Ask a Travel Expert")
+    st.caption("Review visitor questions, approve contributor answers, and track requests for missing data.")
+    questions = _records("Expert_Questions")
+    answers = _records("Expert_Answers")
+    requests = _records("Data_Requests")
+    q_pending = questions[questions.get("Status", pd.Series("", index=questions.index)).map(_is_pending)] if not questions.empty else questions
+    a_pending = answers[answers.get("Status", pd.Series("", index=answers.index)).map(_is_pending)] if not answers.empty else answers
+    r_open = requests[~requests.get("Status", pd.Series("", index=requests.index)).astype(str).str.casefold().isin(["closed", "completed", "rejected"])] if not requests.empty else requests
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Pending questions", len(q_pending))
+    c2.metric("Pending answers", len(a_pending))
+    c3.metric("Open data requests", len(r_open))
+
+    st.markdown("#### Visitor questions")
+    if questions.empty:
+        st.info("No questions have been submitted yet.")
+    else:
+        st.dataframe(questions.tail(50), hide_index=True, use_container_width=True)
+        if not q_pending.empty:
+            choices = {f"{idx}: {_row_label(row, 'Expert_Questions')}"[:120]: idx for idx, row in q_pending.iterrows()}
+            selected = st.selectbox("Select a question", list(choices), key="expert_admin_question")
+            idx = choices[selected]
+            row = q_pending.loc[idx]
+            st.info(f"{row.get('Question', '')}\n\nDestination: {row.get('City', '') or 'All cities'} · Category: {row.get('Category', '')}")
+            c1, c2 = st.columns(2)
+            if c1.button("Mark under review", key="expert_mark_review"):
+                if _set_fields("Expert_Questions", idx, {"Status": "Under Review"}): st.cache_data.clear(); st.rerun()
+            if c2.button("Close question", key="expert_close_question"):
+                if _set_fields("Expert_Questions", idx, {"Status": "Closed"}): st.cache_data.clear(); st.rerun()
+
+    st.markdown("#### Contributor answers")
+    if answers.empty:
+        st.info("No contributor answers have been submitted yet.")
+    else:
+        st.dataframe(answers.tail(50), hide_index=True, use_container_width=True)
+        if not a_pending.empty:
+            choices = {f"{idx}: {_row_label(row, 'Contributor_Answers')}"[:120]: idx for idx, row in a_pending.iterrows()}
+            selected = st.selectbox("Select an answer", list(choices), key="expert_admin_answer")
+            idx = choices[selected]
+            row = a_pending.loc[idx]
+            st.write(str(row.get("Answer", "")))
+            c1, c2 = st.columns(2)
+            if c1.button("✅ Approve and publish answer", key="expert_approve_answer"):
+                if _set_fields("Expert_Answers", idx, {"Status": "Approved", "Published": "TRUE", "Approved_By": st.session_state.get("username", "admin")}):
+                    _award_contributor_points(row.get("Contributor_ID", ""), 5, row.get("Answer_ID", ""), "Approved helpful expert answer")
+                    qid = str(row.get("Question_ID", ""))
+                    if not questions.empty and "Question_ID" in questions.columns:
+                        matches = questions[questions["Question_ID"].astype(str).eq(qid)]
+                        for qidx in matches.index:
+                            _set_fields("Expert_Questions", qidx, {"Status": "Answered", "Answer_ID": row.get("Answer_ID", ""), "Published": "TRUE"})
+                    st.cache_data.clear(); st.rerun()
+            if c2.button("❌ Reject answer", key="expert_reject_answer"):
+                if _set_fields("Expert_Answers", idx, {"Status": "Rejected", "Published": "FALSE", "Approved_By": st.session_state.get("username", "admin")}): st.cache_data.clear(); st.rerun()
+
+    st.markdown("#### Requested missing data")
+    if requests.empty:
+        st.info("No missing-data requests have been created yet.")
+    else:
+        st.dataframe(requests.tail(50), hide_index=True, use_container_width=True)
+
+
 def render_content_admin():
     st.subheader("🧩 Content, Events, Experiences & Partners")
     st.caption("Manage the new travel data from the Admin Panel. Google Sheets remains the backend; no manual sheet editing is required.")
-    tabs = st.tabs(["Events", "Traveler Experiences", "Affiliate Widgets", "Contributors", "Moderation"])
+    tabs = st.tabs(["Events", "Traveler Experiences", "Affiliate Widgets", "Contributors", "Moderation", "🧠 Ask Experts"])
     with tabs[0]:
         with st.form("admin_add_event"):
             c1, c2 = st.columns(2)
@@ -151,3 +241,5 @@ def render_content_admin():
                                 st.warning(f'{tab} item rejected.'); st.cache_data.clear(); st.rerun()
                     else:
                         st.caption("No pending items in this tab.")
+    with tabs[5]:
+        render_expert_admin()

@@ -24,7 +24,7 @@ except ImportError:
     # in the repository; the full helper is included in the current package.
     repair_dates_from_workbook = None
 from campaign_features_v2 import render_campaign_page, render_creator_hub, render_contact_page
-from triptrend_new_features_v2 import (ensure_new_tabs, render_trip_planner, render_best_dates, render_advertiser_account_gate, render_advertiser_notice, render_targeted_widgets, render_events_explorer, render_contributor_area, render_approved_experiences, _record_like, _records, _sheet_dates)
+from triptrend_new_features_v2 import (ensure_new_tabs, render_trip_planner, render_best_dates, render_advertiser_account_gate, render_advertiser_notice, render_targeted_widgets, render_events_explorer, render_contributor_area, render_approved_experiences, render_ask_travel_expert, _record_like, _records, _sheet_dates)
 from triptrend_admin_tools_v2 import render_content_admin
 from triptrend_external_data_v2 import external_cities, city_key, available_city_names, price_history_city_names
 
@@ -67,7 +67,7 @@ def tr(text: str) -> str:
 
 def get_default_config():
     return {
-        "_settings": {"public_access": True, "default_landing_page": "🧳 Plan Your Trip", "download_code": "premium2026"},
+        "_settings": {"public_access": True, "default_landing_page": "🧳 Plan Your Trip", "download_code": "premium2026", "show_explore_cards": True, "show_free_campaign_cta": True, "free_campaign_pages": "Plan Your Trip,Deals & Events,Traveler Community,Traveler Guide,Ask a Travel Expert"},
         "_sponsors": {"General": []},
         "_stats": {"daily": {}, "total": {}},
         "_affiliate_networks": {},
@@ -486,6 +486,49 @@ def render_vip_banner(config):
             c1.write(ad['desc'])
             c2.link_button("Claim Now", ad['link'], type="primary", use_container_width=True, key=f"vip_{random.randint(0, 9999)}")
 
+
+def render_explore_cards(page_map, settings):
+    """Show a discoverable home navigation instead of relying on the collapsed sidebar."""
+    if not settings.get("show_explore_cards", True):
+        return
+    cards = [
+        ("🧳 Plan Your Trip", "Hotels, costs, weather, events and trip advice."),
+        ("🧠 Ask a Travel Expert", "Ask a question and get a reviewed answer."),
+        ("🎟️ Deals & Events", "Discover current offers and upcoming events."),
+        ("📅 Best Dates & Booking Advice", "Find better dates and booking patterns."),
+        ("👥 Traveler Community", "Read real experiences and contribute."),
+        ("💼 Advertise", "Promote a travel offer or campaign."),
+    ]
+    st.markdown("### Explore TripTrend")
+    st.caption("Choose what you want to do — the full navigation remains available in the menu.")
+    cols = st.columns(3)
+    for i, (title, description) in enumerate(cards):
+        with cols[i % 3]:
+            with st.container(border=True):
+                st.markdown(f"**{title}**")
+                st.caption(description)
+                if st.button("Explore", key=f"explore_card_{i}", use_container_width=True):
+                    st.session_state.current_page = title
+                    st.rerun()
+
+
+def render_free_campaign_cta(current_page: str, settings):
+    """Render a non-intrusive free-campaign CTA on admin-selected pages."""
+    if not settings.get("show_free_campaign_cta", True):
+        return
+    configured = str(settings.get("free_campaign_pages", "Plan Your Trip,Deals & Events,Traveler Community,Traveler Guide,Ask a Travel Expert"))
+    targets = [x.strip().casefold() for x in configured.split(",") if x.strip()]
+    normalized_page = str(current_page).casefold()
+    if not any(target in normalized_page for target in targets) and "all" not in targets:
+        return
+    with st.container(border=True):
+        c1, c2 = st.columns([4, 1])
+        c1.markdown("**🎁 Have a travel offer or tourism campaign?**")
+        c1.caption("Submit your campaign for a free 30-day trial. Content is reviewed before publication.")
+        if c2.button("Add it free", type="primary", use_container_width=True, key=f"free_campaign_cta_{hash(current_page)}"):
+            st.session_state.current_page = "💼 Advertise"
+            st.rerun()
+
 def generate_fun_facts(df, col_map, city, lang="English"):
     facts = []
     if df.empty: return ["No data available"]
@@ -594,8 +637,11 @@ def main():
     if sheets_configured() and st.session_state.get('role') == 'admin':
         ensure_new_tabs()
     config = load_config()
-    settings = config.get("_settings", {"public_access": True, "default_landing_page": "🧳 Plan Your Trip", "download_code": "premium2026", "show_visitor_counter": True})
+    settings = config.get("_settings", {"public_access": True, "default_landing_page": "🧳 Plan Your Trip", "download_code": "premium2026", "show_visitor_counter": True, "show_explore_cards": True, "show_free_campaign_cta": True, "free_campaign_pages": "Plan Your Trip,Deals & Events,Traveler Community,Traveler Guide,Ask a Travel Expert"})
     settings.setdefault("show_visitor_counter", True)
+    settings.setdefault("show_explore_cards", True)
+    settings.setdefault("show_free_campaign_cta", True)
+    settings.setdefault("free_campaign_pages", "Plan Your Trip,Deals & Events,Traveler Community,Traveler Guide,Ask a Travel Expert")
     
     if 'logged_in' not in st.session_state: st.session_state.logged_in = False
     if 'admin_login_mode' not in st.session_state: st.session_state.admin_login_mode = False
@@ -673,7 +719,7 @@ def main():
     page_map = {
         "planner": "🧳 Plan Your Trip", "best_dates": "📅 Best Dates & Booking Advice",
         "deals_events": "🎟️ Deals & Events",
-        "advertise": "💼 Advertise", "community": "👥 Traveler Community",
+        "advertise": "💼 Advertise", "community": "👥 Traveler Community", "experts": "🧠 Ask a Travel Expert",
         "comparison": "🌍 Compare Destinations", "dashboard": "📊 Dashboard",
         "hot_deal": "⭐ Hotel of the Day", "trends": "📈 Market Intelligence",
         "rankings": "🏆 Rankings", "tracker": "🔥 Hotel Radar",
@@ -736,6 +782,12 @@ def main():
         if st.sidebar.button("Login"):
             st.session_state.logged_in, st.session_state.is_public, st.session_state.admin_login_mode = False, False, True
             st.rerun()
+
+    # The landing page has visible cards so visitors do not need to discover the
+    # collapsed sidebar arrow before understanding the product.
+    if selected_page == settings.get("default_landing_page", "🧳 Plan Your Trip") or selected_page == "🧳 Plan Your Trip":
+        render_explore_cards(page_map, settings)
+    render_free_campaign_cta(selected_page, settings)
     
     # Page-level data mode selector: kept in the content area so visitors can see the active scope.
     st.session_state.setdefault("global_data_mode", "Latest Snapshot Only")
@@ -746,7 +798,7 @@ def main():
     render_vip_banner(config)
 
     city = None
-    if selected_page not in ["🌍 Compare Destinations", "⚙️ Admin Control Panel", "🎟️ Deals & Events", "💼 Advertise", "👥 Traveler Community", "🧳 Plan Your Trip", "📅 Best Dates & Booking Advice", "⭐ Hotel of the Day", "📣 Campaigns", "🎥 Creator Hub", "✉️ Contact & Feedback"]:
+    if selected_page not in ["🌍 Compare Destinations", "⚙️ Admin Control Panel", "🎟️ Deals & Events", "💼 Advertise", "👥 Traveler Community", "🧠 Ask a Travel Expert", "🧳 Plan Your Trip", "📅 Best Dates & Booking Advice", "⭐ Hotel of the Day", "📣 Campaigns", "🎥 Creator Hub", "✉️ Contact & Feedback"]:
         city = city_cards("Select City", city_options, f"page_city_{selected_page}")
         st.sidebar.subheader("📥 Data Export")
         with st.sidebar.expander("Protected Download"):
@@ -799,6 +851,9 @@ def main():
         if not contributors.empty:
             cols = [c for c in ["Display_Name", "Contributor_Type", "City", "Points", "Level"] if c in contributors.columns]
             st.dataframe(contributors.sort_values("Points", ascending=False).head(3)[cols], hide_index=True, use_container_width=True)
+
+    elif selected_page == "🧠 Ask a Travel Expert":
+        render_ask_travel_expert()
 
     elif selected_page == "📣 Campaigns":
         render_campaign_page()
@@ -908,6 +963,12 @@ def main():
         with tab2:
             settings["public_access"] = st.toggle("🔓 Public Access", value=settings.get("public_access", False))
             settings["show_visitor_counter"] = st.toggle("👥 Show visitor counter publicly", value=settings.get("show_visitor_counter", True))
+            settings["show_explore_cards"] = st.toggle("🧭 Show Explore TripTrend cards", value=settings.get("show_explore_cards", True))
+            settings["show_free_campaign_cta"] = st.toggle("🎁 Show free-campaign CTA", value=settings.get("show_free_campaign_cta", True))
+            cta_page_options = ["Plan Your Trip", "Deals & Events", "Traveler Community", "Traveler Guide", "Ask a Travel Expert", "Best Dates", "All"]
+            configured_cta = [x.strip() for x in str(settings.get("free_campaign_pages", "")).split(",") if x.strip()]
+            selected_cta_pages = st.multiselect("Pages that show the free-campaign button", cta_page_options, default=[x for x in cta_page_options if any(x.casefold() in y.casefold() for y in configured_cta)])
+            settings["free_campaign_pages"] = ",".join(selected_cta_pages)
             settings["download_code"] = st.text_input("Download Password", value=settings.get("download_code", "premium2026"))
             landing_options = list(page_map.values())
             configured_landing = settings.get("default_landing_page", landing_options[0])
@@ -919,7 +980,7 @@ def main():
                 save_config(config)
                 if sheets_configured():
                     try:
-                        append_rows("Settings", [["show_visitor_counter", str(bool(settings["show_visitor_counter"]))]], headers=["Setting_Key", "Setting_Value"])
+                        append_rows("Settings", [["show_visitor_counter", str(bool(settings["show_visitor_counter"]))], ["show_explore_cards", str(bool(settings["show_explore_cards"]))], ["show_free_campaign_cta", str(bool(settings["show_free_campaign_cta"]))], ["free_campaign_pages", settings["free_campaign_pages"]]], headers=["Setting_Key", "Setting_Value"])
                     except Exception as exc:
                         st.warning(f"Local setting saved, but Google Sheets setting could not be updated: {exc}")
                 st.success("Updated!")

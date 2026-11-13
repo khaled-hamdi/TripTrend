@@ -20,6 +20,10 @@ NEW_TAB_HEADERS = {
     "Contributor_Points_Log": ["Point_ID", "Contributor_ID", "Activity_Type", "Reference_ID", "Points", "Status", "Reason", "Created_At", "Approved_By"],
     "Reward_Tiers": ["Tier_ID", "Tier_Name", "Min_Points", "Reward_Type", "Reward_Description", "Active", "Requires_Approval"],
     "Affiliate_Widgets": ["Widget_ID", "Partner_Name", "Category", "City", "Target_Pages", "Placement", "Widget_Type", "Widget_Code", "Affiliate_URL", "Description", "Priority", "Start_Date", "End_Date", "Status"],
+    "Expert_Questions": ["Question_ID", "Name", "Contact", "City", "Category", "Travel_Date", "Question", "Created_At", "Status", "Priority", "Assigned_To", "Published", "Likes", "Answer_ID"],
+    "Expert_Answers": ["Answer_ID", "Question_ID", "Contributor_ID", "Contributor_Name", "Answer", "Data_Summary", "Expert_Notes", "Created_At", "Status", "Helpful_Count", "Report_Count", "Approved_By", "Published"],
+    "Data_Requests": ["Request_ID", "Question_ID", "City", "Category", "Description", "Request_Count", "Priority", "Status", "Admin_Notes", "Created_At"],
+    "Answer_Engagement": ["Event_ID", "Answer_ID", "Event_Type", "Session_ID", "Contributor_ID", "Created_At", "Source"],
 }
 
 
@@ -477,9 +481,126 @@ def render_trip_planner(city: str, data_loader, data_mode: str, config: dict):
                     else:
                         st.info("You already liked this contribution from this session.")
 
+    st.markdown("---")
+    render_ask_travel_expert(city, compact=True)
+
     render_contributor_area(city)
 
     render_targeted_widgets("Plan Your Trip", city, limit=6)
+
+
+def _expert_session_id():
+    if not st.session_state.get("expert_session_id"):
+        st.session_state["expert_session_id"] = uuid.uuid4().hex
+    return st.session_state["expert_session_id"]
+
+
+def _expert_event(answer_id: str, event_type: str) -> bool:
+    events = _records("Answer_Engagement")
+    session_id = _expert_session_id()
+    if not events.empty and {"Answer_ID", "Event_Type", "Session_ID"}.issubset(events.columns):
+        duplicate = events[(events["Answer_ID"].astype(str).eq(answer_id)) &
+                            (events["Event_Type"].astype(str).eq(event_type)) &
+                            (events["Session_ID"].astype(str).eq(session_id))]
+        if not duplicate.empty:
+            return False
+    try:
+        append_rows("Answer_Engagement", [[uuid.uuid4().hex, answer_id, event_type, session_id,
+            st.session_state.get("contributor_id", ""), datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "Web"]],
+            headers=NEW_TAB_HEADERS["Answer_Engagement"])
+        _records.clear()
+        return True
+    except Exception:
+        return False
+
+
+def _published_expert_pairs(city: str = ""):
+    questions = _records("Expert_Questions")
+    answers = _records("Expert_Answers")
+    if questions.empty or answers.empty:
+        return pd.DataFrame()
+    approved = answers[answers.get("Status", pd.Series("", index=answers.index)).astype(str).str.casefold().isin(["approved", "published", "active"])].copy()
+    if "Published" in answers.columns:
+        published = answers["Published"].astype(str).str.casefold().isin(["true", "yes", "1", "published"])
+        approved = approved[published | answers["Status"].astype(str).str.casefold().isin(["approved", "published", "active"])]
+    if approved.empty:
+        return pd.DataFrame()
+    if city and "City" in questions.columns:
+        questions = questions[questions["City"].astype(str).map(city_key).isin(["", city_key(city)])]
+    if questions.empty:
+        return pd.DataFrame()
+    return questions.merge(approved, left_on="Question_ID", right_on="Question_ID", suffixes=("_question", "_answer"))
+
+
+def render_ask_travel_expert(city: str = "", compact: bool = False):
+    """Public questions, approved answers, helpful votes, and contributor answer form."""
+    if not compact:
+        st.title("🧠 Ask a Travel Expert")
+        st.caption("Ask about hotels, costs, transport, weather, events, or the best time to travel. Answers are reviewed before publication.")
+    city_options = price_history_city_names() or external_cities()
+    city_options = list(dict.fromkeys([str(x).strip() for x in city_options if str(x).strip()]))
+    with st.form(f"expert_question_form_{city_key(city) if city else 'general'}"):
+        c1, c2 = st.columns(2)
+        selected_city = c1.selectbox("Destination", ["General / All cities"] + city_options,
+            index=(city_options.index(city) + 1 if city in city_options else 0))
+        category = c2.selectbox("Question category", ["Hotels", "Trip cost", "Transport", "Food", "SIM / Internet", "Events", "Best dates", "Activities", "Visa / requirements", "Other"])
+        name = st.text_input("Your name (optional)")
+        contact = st.text_input("Email or contact (optional)")
+        travel_date = st.text_input("Travel date (optional)", placeholder="Example: 15–20 October")
+        question = st.text_area("Your question", placeholder="What would you like help planning?")
+        needs_data = st.checkbox("I could not find this information on the website", value=False)
+        submitted = st.form_submit_button("Send question", type="primary")
+    if submitted:
+        if not question.strip():
+            st.error("Please write your question first.")
+        else:
+            qid = f"Q-{uuid.uuid4().hex[:10]}"
+            qcity = "" if selected_city == "General / All cities" else selected_city
+            append_rows("Expert_Questions", [[qid, name.strip() or "Traveler", contact.strip(), qcity, category,
+                travel_date.strip(), question.strip(), datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "Pending", "Normal", "", "FALSE", 0, ""]], headers=NEW_TAB_HEADERS["Expert_Questions"])
+            if needs_data:
+                append_rows("Data_Requests", [[f"REQ-{uuid.uuid4().hex[:10]}", qid, qcity, category, question.strip(), 1, "Normal", "Open", "", datetime.now().strftime("%Y-%m-%d %H:%M:%S")]], headers=NEW_TAB_HEADERS["Data_Requests"])
+            _records.clear()
+            st.success("Your question was received. An expert or approved contributor will answer it after review.")
+
+    pairs = _published_expert_pairs(city)
+    if not pairs.empty:
+        st.subheader("💬 Helpful answers from travelers and experts")
+        engagement = _records("Answer_Engagement")
+        for i, (_, row) in enumerate(pairs.tail(8).iloc[::-1].iterrows()):
+            answer_id = str(row.get("Answer_ID", f"answer-{i}"))
+            helpful = int(((engagement.get("Answer_ID", pd.Series(dtype=str)).astype(str).eq(answer_id)) & engagement.get("Event_Type", pd.Series(dtype=str)).astype(str).eq("Helpful")).sum()) if not engagement.empty else 0
+            reports = int(((engagement.get("Answer_ID", pd.Series(dtype=str)).astype(str).eq(answer_id)) & engagement.get("Event_Type", pd.Series(dtype=str)).astype(str).eq("Report")).sum()) if not engagement.empty else 0
+            with st.container(border=True):
+                st.markdown(f"**{row.get('Question_question', row.get('Question', 'Traveler question'))}**")
+                st.write(str(row.get("Answer", "")))
+                author = row.get("Contributor_Name", "Travel contributor")
+                st.caption(f"Answered by {author} · {row.get('City_question', row.get('City', 'All destinations'))} · Helpful {helpful}")
+                c1, c2 = st.columns(2)
+                if c1.button(f"👍 Helpful ({helpful})", key=f"expert_helpful_{answer_id}_{i}"):
+                    if _expert_event(answer_id, "Helpful"): st.success("Thanks — your feedback was counted.")
+                    else: st.info("You already rated this answer in this session.")
+                if c2.button(f"⚑ Report ({reports})", key=f"expert_report_{answer_id}_{i}"):
+                    if _expert_event(answer_id, "Report"): st.warning("Thanks. The answer was reported for review.")
+
+    if st.session_state.get("contributor_id"):
+        pending = _records("Expert_Questions")
+        if not pending.empty:
+            pending = pending[pending.get("Status", pd.Series("", index=pending.index)).astype(str).str.casefold().isin(["pending", "new", "under review", ""])]
+        if not pending.empty:
+            st.subheader("✍️ Answer a traveler question")
+            choices = {f"{idx}: {str(r.get('Question', ''))[:90]}": idx for idx, r in pending.tail(30).iterrows()}
+            selected = st.selectbox("Choose a question", list(choices), key=f"expert_answer_select_{city_key(city) or 'all'}")
+            qrow = pending.loc[choices[selected]]
+            answer_text = st.text_area("Your answer", key=f"expert_answer_text_{city_key(city) or 'all'}")
+            if st.button("Submit answer for review", key=f"expert_answer_submit_{city_key(city) or 'all'}"):
+                if not answer_text.strip():
+                    st.error("Write an answer first.")
+                else:
+                    aid = f"ANS-{uuid.uuid4().hex[:10]}"
+                    append_rows("Expert_Answers", [[aid, qrow.get("Question_ID", ""), st.session_state.get("contributor_id", ""), st.session_state.get("contributor_name", "Contributor"), answer_text.strip(), "", "", datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "Pending Review", 0, 0, "", "FALSE"]], headers=NEW_TAB_HEADERS["Expert_Answers"])
+                    append_rows("Contributor_Points_Log", [[uuid.uuid4().hex, st.session_state.get("contributor_id", ""), "Expert Answer", aid, 1, "Pending", "Submitted an answer for review", datetime.now().strftime("%Y-%m-%d %H:%M:%S"), ""]], headers=NEW_TAB_HEADERS["Contributor_Points_Log"])
+                    st.success("Your answer was submitted for review.")
 
 
 def render_best_dates(city: str, data_loader, data_mode: str):
