@@ -24,7 +24,14 @@ except ImportError:
     # in the repository; the full helper is included in the current package.
     repair_dates_from_workbook = None
 from campaign_features_v2 import render_campaign_page, render_creator_hub, render_contact_page
-from triptrend_new_features_v2 import (ensure_new_tabs, render_trip_planner, render_best_dates, render_advertiser_account_gate, render_advertiser_notice, render_targeted_widgets, render_events_explorer, render_contributor_area, render_approved_experiences, render_ask_travel_expert, _record_like, _records, _sheet_dates)
+from triptrend_new_features_v2 import (ensure_new_tabs, render_trip_planner, render_best_dates, render_advertiser_account_gate, render_advertiser_notice, render_targeted_widgets, render_events_explorer, render_contributor_area, render_approved_experiences, _record_like, _records, _sheet_dates)
+try:
+    from triptrend_new_features_v2 import render_ask_travel_expert
+except ImportError:
+    # Compatibility fallback: the app remains bootable while an older helper
+    # file is being replaced in the deployed repository.
+    def render_ask_travel_expert(city="", compact=False):
+        st.info("Ask a Travel Expert is being enabled. Please deploy the current triptrend_new_features_v2.py file.")
 from triptrend_admin_tools_v2 import render_content_admin
 from triptrend_external_data_v2 import external_cities, city_key, available_city_names, price_history_city_names
 
