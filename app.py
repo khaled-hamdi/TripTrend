@@ -13,6 +13,7 @@ import random
 import io
 import hmac
 import hashlib
+from urllib.parse import quote, unquote
 from triptrend_data_engine import normalize_city
 from google_sheets_adapter import read_tab, append_rows
 from triptrend_sheets_config import load_config_from_sheets
@@ -93,6 +94,23 @@ TRANSLATIONS = {
 def tr(text: str) -> str:
     lang = st.session_state.get("language_code", "en")
     return TRANSLATIONS.get(text, {}).get(lang, text)
+
+
+def _query_city_match(value, options):
+    """Match a copied Google Sheets city name to the canonical app city."""
+    wanted = unquote(str(value or "")).strip()
+    if not wanted:
+        return ""
+    wanted_key = city_key(wanted)
+    for option in options:
+        if city_key(option) == wanted_key or str(option).strip().casefold() == wanted.casefold():
+            return str(option).strip()
+    return ""
+
+
+def _city_hub_query(city: str) -> str:
+    """Return a shareable query string using the exact canonical city name."""
+    return f"?city={quote(str(city).strip())}"
 
 def get_default_config():
     return {
@@ -762,6 +780,15 @@ def main():
     city_options = price_history_city_names()
     if not city_options:
         city_options = list(CITIES_DATA.keys())
+    # A shared link such as ?city=Dubai opens the comprehensive City Hub.
+    # The copied name may come directly from Google Sheets; city_key() handles
+    # harmless spelling/spacing differences without creating a new city.
+    query_city = _query_city_match(st.query_params.get("city", ""), city_options)
+    if query_city and not st.session_state.get("query_city_applied"):
+        st.session_state["query_city_applied"] = query_city
+        st.session_state["planner_city"] = query_city
+        st.session_state["current_page"] = "🧳 Plan Your Trip"
+        st.session_state["planner_details_loaded_" + city_key(query_city)] = True
 
     def city_cards(label: str, options, key: str):
         """Mobile-friendly city selector with clickable destination cards."""
@@ -848,6 +875,16 @@ def main():
     if selected_page == "🧳 Plan Your Trip":
         planner_options = city_options
         planner_city = city_cards("Destination", planner_options, "planner_city")
+        if query_city and st.session_state.get("query_city_applied") == query_city:
+            planner_city = query_city
+            st.session_state["planner_city"] = query_city
+            st.info(f"📍 City Hub: showing all available TripTrend information for **{query_city}**.")
+            st.text_input("Share this city guide", value=_city_hub_query(query_city), key=f"city_hub_link_{city_key(query_city)}", help="Append this query to your TripTrend website URL.")
+            if st.button("Clear city link and choose another destination", key=f"clear_city_hub_{city_key(query_city)}"):
+                st.query_params.clear()
+                st.session_state.pop("query_city_applied", None)
+                st.session_state.pop("planner_city", None)
+                st.rerun()
         render_trip_planner(planner_city, load_data, data_mode, config)
 
     elif selected_page == "📅 Best Dates & Booking Advice":
