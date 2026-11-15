@@ -179,7 +179,7 @@ def render_content_admin():
             city = c1.text_input("City (blank = all cities)")
             page_choices = ["Plan Your Trip", "Best Dates", "Hotel of the Day", "Deal Radar", "Traveler Guide", "Exclusive Deals", "Dashboard"]
             pages = ", ".join(c2.multiselect("Target pages", page_choices, default=["Plan Your Trip"]))
-            placement = c1.selectbox("Placement", ["Inline", "Sidebar", "Featured"])
+            placement = c1.selectbox("Placement", ["Flight Section", "Best Dates", "City Hub", "Inline", "Sidebar", "Featured"])
             widget_type = c2.selectbox("Type", ["Link", "Widget HTML", "Iframe", "Banner"])
             url = st.text_input("Affiliate URL")
             code = st.text_area("Widget/iframe HTML (optional)")

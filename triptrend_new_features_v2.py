@@ -113,7 +113,7 @@ def _sheet_dates(values):
     return parsed
 
 
-def render_targeted_widgets(page_name: str, city: str = "", limit: int = 6):
+def render_targeted_widgets(page_name: str, city: str = "", limit: int = 6, category: str = "", placement: str = ""):
     """Render admin-assigned widgets for a specific page and optional city."""
     widgets = _records("Affiliate_Widgets")
     if widgets.empty:
@@ -123,6 +123,11 @@ def render_targeted_widgets(page_name: str, city: str = "", limit: int = 6):
     if city and "City" in widgets.columns:
         city_keys = widgets["City"].astype(str).map(city_key)
         widgets = widgets[(city_keys == "") | (city_keys == city_key(city))]
+    if category and "Category" in widgets.columns:
+        widgets = widgets[widgets["Category"].astype(str).str.casefold().eq(category.casefold())]
+    if placement and "Placement" in widgets.columns:
+        placements = widgets["Placement"].astype(str).str.casefold()
+        widgets = widgets[placements.eq(placement.casefold()) | placements.eq("all")]
     today = pd.Timestamp.now().normalize()
     if "Start_Date" in widgets.columns:
         start = _sheet_dates(widgets["Start_Date"])
@@ -135,7 +140,11 @@ def render_targeted_widgets(page_name: str, city: str = "", limit: int = 6):
         widgets = widgets[target.str.contains(page_name.casefold(), na=False) | target.str.contains("all", na=False)]
     if widgets.empty:
         return
-    st.subheader("Useful for this trip" if page_name == "Plan Your Trip" else "Featured partners")
+    if category.casefold() == "flights":
+        st.subheader("✈️ Live flight search")
+        st.caption("Flight prices and availability are provided live by the selected travel partner.")
+    else:
+        st.subheader("Useful for this trip" if page_name == "Plan Your Trip" else "Featured partners")
     for i, (_, row) in enumerate(widgets.sort_values("Priority", ascending=True).head(limit).iterrows()):
         _render_widget(row, f"targeted_{city_key(page_name)}_{i}")
 
@@ -368,7 +377,9 @@ def render_trip_planner(city: str, data_loader, data_mode: str, config: dict):
         city_costs = city_prices()
     food = _records("Food_Prices")
     transport = _records("Transport_Prices")
-    flights = external_flights()
+    # Flight prices are intentionally not stored or calculated from a static
+    # sheet. Live flight search is supplied by an Affiliate Widget below.
+    flights = pd.DataFrame()
     activities = _records("Activities")
 
     cards = st.columns(4)
@@ -417,6 +428,10 @@ def render_trip_planner(city: str, data_loader, data_mode: str, config: dict):
         st.dataframe(pd.DataFrame(snapshot), hide_index=True, use_container_width=True)
     else:
         st.info("Additional city information is being collected. You can help by sharing your travel experience.")
+
+    # The widget is filtered to the selected city and Flight category. It is
+    # added from Admin Panel, so no code change is needed for a new partner.
+    render_targeted_widgets("Plan Your Trip", city, limit=3, category="Flights", placement="Flight Section")
 
     st.subheader("📅 Events in this destination")
     if events.empty:
@@ -652,6 +667,7 @@ def render_best_dates(city: str, data_loader, data_mode: str):
         st.write(f"**Move Your Trip:** Moving from {by_day.index[-1]} to {by_day.index[0]} could save about **${(by_day.iloc[-1]['mean'] - by_day.iloc[0]['mean']):,.0f}** on average.")
     else:
         st.info(f"A Golden Window needs more distinct historical arrival dates for {visit_date.strftime(chr(37)+chr(65))}.")
+    render_targeted_widgets("Best Dates", city, limit=2, category="Flights", placement="Best Dates")
 
 
 def render_advertiser_account_gate():
